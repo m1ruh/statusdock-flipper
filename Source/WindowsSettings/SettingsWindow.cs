@@ -112,8 +112,7 @@ namespace StatusDockPreview
 
             DataLabel.Text = isLive ? "Live" : "Sample data";
             NoLiveLabel.Visibility = isLive ? Visibility.Collapsed : Visibility.Visible;
-            PreviewImage.Source = FlipperPreview.Render(displayedSample, clockSeconds,
-                clockOnly, showSeconds, isLive);
+            PreviewImage.Source = FlipperPreview.Render(displayedSample, clockSeconds, clockOnly, showSeconds);
             System.Windows.Automation.AutomationProperties.SetHelpText(PreviewImage,
                 (clockOnly ? "Large Clock" : "PC Stats") +
                 (showSeconds ? " with seconds. " : " without seconds. ") +

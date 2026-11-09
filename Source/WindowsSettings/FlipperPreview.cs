@@ -36,37 +36,27 @@ namespace StatusDockPreview
             { '%', new byte[] { 25, 26,  4,  4,  4, 11, 19 } },
             { ' ', new byte[] {  0,  0,  0,  0,  0,  0,  0 } },
             { 'A', new byte[] { 14, 17, 17, 31, 17, 17, 17 } },
-            { 'B', new byte[] { 30, 17, 17, 30, 17, 17, 30 } },
             { 'C', new byte[] { 14, 17, 16, 16, 16, 17, 14 } },
-            { 'D', new byte[] { 30, 17, 17, 17, 17, 17, 30 } },
-            { 'E', new byte[] { 31, 16, 16, 30, 16, 16, 31 } },
             { 'G', new byte[] { 14, 17, 16, 23, 17, 17, 15 } },
-            { 'I', new byte[] { 14,  4,  4,  4,  4,  4, 14 } },
-            { 'K', new byte[] { 17, 18, 20, 24, 20, 18, 17 } },
-            { 'L', new byte[] { 16, 16, 16, 16, 16, 16, 31 } },
             { 'M', new byte[] { 17, 27, 21, 21, 17, 17, 17 } },
-            { 'O', new byte[] { 14, 17, 17, 17, 17, 17, 14 } },
             { 'P', new byte[] { 30, 17, 17, 30, 16, 16, 16 } },
             { 'R', new byte[] { 30, 17, 17, 30, 20, 18, 17 } },
-            { 'S', new byte[] { 15, 16, 16, 14,  1,  1, 30 } },
-            { 'T', new byte[] { 31,  4,  4,  4,  4,  4,  4 } },
-            { 'U', new byte[] { 17, 17, 17, 17, 17, 17, 14 } },
-            { 'V', new byte[] { 17, 17, 17, 17, 17, 10,  4 } }
+            { 'U', new byte[] { 17, 17, 17, 17, 17, 17, 14 } }
         };
 
         private readonly byte[] pixels = new byte[Width * Height];
 
         public static BitmapSource Render(
-            LiveSample sample, int clockSeconds, bool clockOnly, bool showSeconds, bool isLive)
+            LiveSample sample, int clockSeconds, bool clockOnly, bool showSeconds)
         {
             var preview = new FlipperPreview();
             var time = TimeSpan.FromSeconds(clockSeconds);
             string clock = time.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
             string seconds = showSeconds ? time.ToString(@"\:ss", CultureInfo.InvariantCulture) : "";
             if (clockOnly)
-                preview.DrawLargeClock(clock, seconds);
+                preview.DrawClockGroup(clock, seconds, 4, 1, 4, 46, Dark);
             else
-                preview.DrawStats(sample, clock, seconds, isLive);
+                preview.DrawStats(sample, clock, seconds);
 
             var bitmap = BitmapSource.Create(Width, Height, 96, 96, PixelFormats.Indexed8,
                 Palette, preview.pixels, Width);
@@ -74,27 +64,25 @@ namespace StatusDockPreview
             return bitmap;
         }
 
-        private void DrawStats(LiveSample sample, string clock, string seconds, bool isLive)
+        private void DrawStats(LiveSample sample, string clock, string seconds)
         {
             // Header, meter rows and alignment follow desk_draw and desk_meter in statusdock.c.
             Fill(0, 0, Width, 23, Dark);
-            DrawText(clock, 4, 5, 2, Light);
-            DrawText(seconds, 6 + TextWidth(clock, 2), 12, 1, Light);
-            DrawRight("STATUSDOCK", 125, 3, Light);
-            DrawRight(isLive ? "USB LIVE" : "SAMPLE", 125, 13, Light);
+            DrawClockGroup(clock, seconds, 3, 2, 6, 22, Light);
 
             DrawMeter("CPU", 35, sample.Cpu, sample.CpuTemp);
             DrawMeter("RAM", 48, sample.Ram, LiveSample.UnknownMetric);
             DrawMeter("GPU", 61, sample.Gpu, sample.GpuTemp);
         }
 
-        private void DrawLargeClock(string clock, string seconds)
+        private void DrawClockGroup(
+            string clock, string seconds, int clockScale, int secondsScale, int gap, int bottom, byte color)
         {
-            int clockWidth = TextWidth(clock, 4);
-            int totalWidth = clockWidth + (seconds.Length > 0 ? 4 + TextWidth(seconds, 1) : 0);
+            int clockWidth = TextWidth(clock, clockScale);
+            int totalWidth = clockWidth + (seconds.Length > 0 ? gap + TextWidth(seconds, secondsScale) : 0);
             int left = (Width - totalWidth) / 2;
-            DrawText(clock, left, 18, 4, Dark);
-            DrawText(seconds, left + clockWidth + 4, 39, 1, Dark);
+            DrawText(clock, left, bottom - 7 * clockScale, clockScale, color);
+            DrawText(seconds, left + clockWidth + gap, bottom - 7 * secondsScale, secondsScale, color);
         }
 
         private void DrawMeter(string label, int baseline, int percent, int temperature)

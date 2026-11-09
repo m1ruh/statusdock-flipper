@@ -85,14 +85,22 @@ static void desk_draw_clock_digits(Canvas* canvas, const char* text, int x, int 
     }
 }
 
-static void desk_draw_large_clock(Canvas* canvas, const char* clock, const char* seconds) {
-    const int clock_width = (4 * 5 + 3 + 4) * 4; // Four digits, colon and four gaps at 4×.
-    const int seconds_width = 2 * 5 + 3 + 2;
-    const int gap = 4;
+static void desk_draw_clock_group(
+    Canvas* canvas,
+    const char* clock,
+    const char* seconds,
+    int clock_scale,
+    int seconds_scale,
+    int gap,
+    int bottom) {
+    // Digit columns, colon columns and the gaps between characters.
+    int clock_width = (4 * 5 + 3 + 4) * clock_scale;
+    int seconds_width = (2 * 5 + 3 + 2) * seconds_scale;
     int width = clock_width + (*seconds ? gap + seconds_width : 0);
     int left = (128 - width) / 2;
-    desk_draw_clock_digits(canvas, clock, left, 18, 4);
-    desk_draw_clock_digits(canvas, seconds, left + clock_width + gap, 39, 1);
+    desk_draw_clock_digits(canvas, clock, left, bottom - 7 * clock_scale, clock_scale);
+    desk_draw_clock_digits(
+        canvas, seconds, left + clock_width + gap, bottom - 7 * seconds_scale, seconds_scale);
 }
 
 static void desk_meter(
@@ -149,23 +157,16 @@ static void desk_draw(Canvas* canvas, void* context) {
         snprintf(seconds, sizeof(seconds), ":%02u", (unsigned)(clock_seconds % 60U));
     }
     if(sample.large_clock) {
-        desk_draw_large_clock(canvas, clock, seconds);
+        desk_draw_clock_group(canvas, clock, seconds, 4, 1, 4, 46);
         return;
     }
 
     canvas_draw_box(canvas, 0, 0, 128, 23);
     canvas_set_color(canvas, ColorWhite);
-    canvas_set_font(canvas, FontBigNumbers);
-    canvas_draw_str(canvas, 4, 19, clock);
-    uint16_t clock_width = canvas_string_width(canvas, clock);
-    canvas_set_font(canvas, FontSecondary);
-    if(sample.show_seconds) {
-        canvas_draw_str(canvas, 4 + clock_width + 2, 19, seconds);
-    }
-    canvas_draw_str_aligned(canvas, 125, 10, AlignRight, AlignBottom, "STATUSDOCK");
-    canvas_draw_str_aligned(canvas, 125, 20, AlignRight, AlignBottom, "USB LIVE");
+    desk_draw_clock_group(canvas, clock, seconds, 3, 2, 6, 22);
 
     canvas_set_color(canvas, ColorBlack);
+    canvas_set_font(canvas, FontSecondary);
     desk_meter(canvas, 35, "CPU", sample.cpu, sample.cpu_temp);
     desk_meter(canvas, 48, "RAM", sample.ram, METRIC_UNKNOWN);
     desk_meter(canvas, 61, "GPU", sample.gpu, sample.gpu_temp);
