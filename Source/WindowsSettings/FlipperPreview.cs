@@ -53,8 +53,10 @@ namespace StatusDockPreview
             var time = TimeSpan.FromSeconds(clockSeconds);
             string clock = time.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
             string seconds = showSeconds ? time.ToString(@"\:ss", CultureInfo.InvariantCulture) : "";
-            if (clockOnly)
-                preview.DrawClockGroup(clock, seconds, 4, 1, 4, 46, Dark);
+            if (clockOnly && showSeconds)
+                preview.DrawClockGroup(clock, seconds, 3, 4, 2, 3, 6, 46, Dark);
+            else if (clockOnly)
+                preview.DrawClockGroup(clock, seconds, 4, 4, 1, 1, 4, 46, Dark);
             else
                 preview.DrawStats(sample, clock, seconds);
 
@@ -68,7 +70,7 @@ namespace StatusDockPreview
         {
             // Header, meter rows and alignment follow desk_draw and desk_meter in statusdock.c.
             Fill(0, 0, Width, 23, Dark);
-            DrawClockGroup(clock, seconds, 3, 2, 6, 22, Light);
+            DrawClockGroup(clock, seconds, 3, 3, 2, 2, 6, 22, Light);
 
             DrawMeter("CPU", 35, sample.Cpu, sample.CpuTemp);
             DrawMeter("RAM", 48, sample.Ram, LiveSample.UnknownMetric);
@@ -76,13 +78,15 @@ namespace StatusDockPreview
         }
 
         private void DrawClockGroup(
-            string clock, string seconds, int clockScale, int secondsScale, int gap, int bottom, byte color)
+            string clock, string seconds, int clockScaleX, int clockScaleY, int secondsScaleX,
+            int secondsScaleY, int gap, int bottom, byte color)
         {
-            int clockWidth = TextWidth(clock, clockScale);
-            int totalWidth = clockWidth + (seconds.Length > 0 ? gap + TextWidth(seconds, secondsScale) : 0);
+            int clockWidth = TextWidth(clock, clockScaleX);
+            int totalWidth = clockWidth + (seconds.Length > 0 ? gap + TextWidth(seconds, secondsScaleX) : 0);
             int left = (Width - totalWidth) / 2;
-            DrawText(clock, left, bottom - 7 * clockScale, clockScale, color);
-            DrawText(seconds, left + clockWidth + gap, bottom - 7 * secondsScale, secondsScale, color);
+            DrawText(clock, left, bottom - 7 * clockScaleY, clockScaleX, color, clockScaleY);
+            DrawText(seconds, left + clockWidth + gap, bottom - 7 * secondsScaleY, secondsScaleX,
+                color, secondsScaleY);
         }
 
         private void DrawMeter(string label, int baseline, int percent, int temperature)
@@ -119,8 +123,9 @@ namespace StatusDockPreview
             return character == ':' || character == ' ' ? 3 : 5;
         }
 
-        private void DrawText(string text, int x, int y, int scale, byte color)
+        private void DrawText(string text, int x, int y, int scaleX, byte color, int? heightScale = null)
         {
+            int scaleY = heightScale ?? scaleX;
             foreach (char character in text)
             {
                 int width = GlyphWidth(character);
@@ -130,10 +135,10 @@ namespace StatusDockPreview
                     for (int column = 0; column < width; column++)
                     {
                         if ((glyph[row] & (1 << (width - 1 - column))) != 0)
-                            Fill(x + column * scale, y + row * scale, scale, scale, color);
+                            Fill(x + column * scaleX, y + row * scaleY, scaleX, scaleY, color);
                     }
                 }
-                x += (width + 1) * scale;
+                x += (width + 1) * scaleX;
             }
         }
 

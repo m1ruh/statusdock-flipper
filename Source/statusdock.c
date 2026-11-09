@@ -69,7 +69,8 @@ static const uint8_t desk_clock_glyphs[][7] = {
     {0, 0, 2, 2, 0, 2, 2},
 };
 
-static void desk_draw_clock_digits(Canvas* canvas, const char* text, int x, int y, int scale) {
+static void desk_draw_clock_digits(
+    Canvas* canvas, const char* text, int x, int y, int scale_x, int scale_y) {
     for(; *text; ++text) {
         bool colon = *text == ':';
         const uint8_t* glyph = desk_clock_glyphs[colon ? 10 : *text - '0'];
@@ -77,11 +78,12 @@ static void desk_draw_clock_digits(Canvas* canvas, const char* text, int x, int 
         for(int row = 0; row < 7; ++row) {
             for(int column = 0; column < width; ++column) {
                 if(glyph[row] & (1U << (width - 1 - column))) {
-                    canvas_draw_box(canvas, x + column * scale, y + row * scale, scale, scale);
+                    canvas_draw_box(
+                        canvas, x + column * scale_x, y + row * scale_y, scale_x, scale_y);
                 }
             }
         }
-        x += (width + 1) * scale;
+        x += (width + 1) * scale_x;
     }
 }
 
@@ -89,18 +91,26 @@ static void desk_draw_clock_group(
     Canvas* canvas,
     const char* clock,
     const char* seconds,
-    int clock_scale,
-    int seconds_scale,
+    int clock_scale_x,
+    int clock_scale_y,
+    int seconds_scale_x,
+    int seconds_scale_y,
     int gap,
     int bottom) {
     // Digit columns, colon columns and the gaps between characters.
-    int clock_width = (4 * 5 + 3 + 4) * clock_scale;
-    int seconds_width = (2 * 5 + 3 + 2) * seconds_scale;
+    int clock_width = (4 * 5 + 3 + 4) * clock_scale_x;
+    int seconds_width = (2 * 5 + 3 + 2) * seconds_scale_x;
     int width = clock_width + (*seconds ? gap + seconds_width : 0);
     int left = (128 - width) / 2;
-    desk_draw_clock_digits(canvas, clock, left, bottom - 7 * clock_scale, clock_scale);
     desk_draw_clock_digits(
-        canvas, seconds, left + clock_width + gap, bottom - 7 * seconds_scale, seconds_scale);
+        canvas, clock, left, bottom - 7 * clock_scale_y, clock_scale_x, clock_scale_y);
+    desk_draw_clock_digits(
+        canvas,
+        seconds,
+        left + clock_width + gap,
+        bottom - 7 * seconds_scale_y,
+        seconds_scale_x,
+        seconds_scale_y);
 }
 
 static void desk_meter(
@@ -157,13 +167,18 @@ static void desk_draw(Canvas* canvas, void* context) {
         snprintf(seconds, sizeof(seconds), ":%02u", (unsigned)(clock_seconds % 60U));
     }
     if(sample.large_clock) {
-        desk_draw_clock_group(canvas, clock, seconds, 4, 1, 4, 46);
+        if(sample.show_seconds) {
+            // Narrower columns fit 21-pixel seconds beside the 28-pixel clock.
+            desk_draw_clock_group(canvas, clock, seconds, 3, 4, 2, 3, 6, 46);
+        } else {
+            desk_draw_clock_group(canvas, clock, seconds, 4, 4, 1, 1, 4, 46);
+        }
         return;
     }
 
     canvas_draw_box(canvas, 0, 0, 128, 23);
     canvas_set_color(canvas, ColorWhite);
-    desk_draw_clock_group(canvas, clock, seconds, 3, 2, 6, 22);
+    desk_draw_clock_group(canvas, clock, seconds, 3, 3, 2, 2, 6, 22);
 
     canvas_set_color(canvas, ColorBlack);
     canvas_set_font(canvas, FontSecondary);
