@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -55,7 +56,7 @@ namespace StatusDockPreview
             MaxHeight = SystemParameters.WorkArea.Height;
             MaxWidth = SystemParameters.WorkArea.Width;
 
-            var settings = LoadSettings();
+            var settings = LoadSettings(true) ?? new PreviewSettings();
             ClockChoice.IsChecked = settings.Display == "clock";
             StatsChoice.IsChecked = !ClockChoice.IsChecked;
             SecondsChoice.IsChecked = settings.ShowSeconds ?? true;
@@ -68,7 +69,7 @@ namespace StatusDockPreview
             ready = true;
 
             previewTimer.Interval = TimeSpan.FromMilliseconds(250);
-            previewTimer.Tick += (sender, e) => RefreshPreview();
+            previewTimer.Tick += (sender, e) => RefreshPreview(RefreshSavedView());
             Closed += (sender, e) => previewTimer.Stop();
             previewTimer.Start();
         }
@@ -76,15 +77,20 @@ namespace StatusDockPreview
         private void OnChoiceChanged(object sender, RoutedEventArgs e)
         {
             if (!ready) return;
+            if (sender == SecondsChoice)
+                SaveCurrentSettings(settings => settings.ShowSeconds = SecondsChoice.IsChecked == true);
+            else if (sender == InvertChoice)
+                SaveCurrentSettings(settings => settings.InvertDisplay = InvertChoice.IsChecked == true);
+            else
+                SaveCurrentSettings(settings => settings.Display = sender == ClockChoice ? "clock" : "stats");
             RefreshPreview(true);
-            SaveCurrentSettings();
         }
 
         private void OnThemeChanged(object sender, RoutedEventArgs e)
         {
             if (!ready) return;
             ApplyTheme();
-            SaveCurrentSettings();
+            SaveCurrentSettings(settings => settings.Theme = LightThemeChoice.IsChecked == true ? "light" : "dark");
         }
 
         private void ApplyTheme()
@@ -115,18 +121,27 @@ namespace StatusDockPreview
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr handle, int attribute, ref int value, int size);
 
-        private void SaveCurrentSettings()
+        private void SaveCurrentSettings(Action<PreviewSettings> change)
         {
-            var settings = new PreviewSettings
-            {
-                Display = ClockChoice.IsChecked == true ? "clock" : "stats",
-                ShowSeconds = SecondsChoice.IsChecked == true,
-                Theme = LightThemeChoice.IsChecked == true ? "light" : "dark",
-                InvertDisplay = InvertChoice.IsChecked == true
-            };
             try
             {
-                SaveSettings(settings);
+                // The sender may save an OK-button selection while Settings is open.
+                using (var mutex = new Mutex(false, @"Local\StatusDock-Preferences"))
+                {
+                    bool locked;
+                    try { locked = mutex.WaitOne(500); }
+                    catch (AbandonedMutexException) { locked = true; }
+                    if (!locked) throw new IOException("The preferences file is busy.");
+                    try
+                    {
+                        var settings = LoadSettings() ?? new PreviewSettings();
+                        settings.Display = settings.Display == "clock" ? "clock" : "stats";
+                        settings.ShowSeconds = settings.ShowSeconds ?? true;
+                        change(settings);
+                        SaveSettings(settings);
+                    }
+                    finally { mutex.ReleaseMutex(); }
+                }
                 SaveStatus.Text = "Settings saved.";
             }
             catch (IOException)
@@ -137,6 +152,24 @@ namespace StatusDockPreview
             {
                 ShowSaveError();
             }
+        }
+
+        private bool RefreshSavedView()
+        {
+            var settings = LoadSettings();
+            if (settings == null || (settings.Display != "clock" && settings.Display != "stats"))
+                return false;
+            bool clock = settings.Display == "clock";
+            if (ClockChoice.IsChecked == clock) return false;
+
+            ready = false;
+            try
+            {
+                ClockChoice.IsChecked = clock;
+                StatsChoice.IsChecked = !clock;
+            }
+            finally { ready = true; }
+            return true;
         }
 
         private void RefreshPreview(bool force = false)
@@ -174,25 +207,26 @@ namespace StatusDockPreview
                 (isLive ? "Live." : "No live data. Showing sample data."));
         }
 
-        private PreviewSettings LoadSettings()
+        private PreviewSettings LoadSettings(bool reportError = false)
         {
             try
             {
-                using (var file = File.OpenRead(settingsPath))
+                using (var file = File.Open(settingsPath, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
                     return (PreviewSettings)new DataContractJsonSerializer(typeof(PreviewSettings))
                         .ReadObject(file) ?? new PreviewSettings();
             }
             catch (FileNotFoundException) { return new PreviewSettings(); }
-            catch (IOException) { return UseDefaultSettings(); }
-            catch (UnauthorizedAccessException) { return UseDefaultSettings(); }
-            catch (SerializationException) { return UseDefaultSettings(); }
-            catch (XmlException) { return UseDefaultSettings(); }
+            catch (IOException) { return UnavailableSettings(reportError); }
+            catch (UnauthorizedAccessException) { return UnavailableSettings(reportError); }
+            catch (SerializationException) { return UnavailableSettings(reportError); }
+            catch (XmlException) { return UnavailableSettings(reportError); }
         }
 
-        private PreviewSettings UseDefaultSettings()
+        private PreviewSettings UnavailableSettings(bool reportError)
         {
-            SaveStatus.Text = "Could not read saved settings. Using defaults.";
-            return new PreviewSettings();
+            if (reportError) SaveStatus.Text = "Could not read saved settings. Using defaults.";
+            return null;
         }
 
         private void SaveSettings(PreviewSettings settings)

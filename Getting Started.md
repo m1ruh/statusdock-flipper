@@ -9,6 +9,8 @@
 
 StatusDock saves your choices in `Windows/StatusDock Settings.json`.
 
+While live data is showing, briefly press **OK** on the Flipper to switch between **PC Stats** and **Large Clock**. The Windows sender saves that view even when Settings is closed. Changing the view in **StatusDock Settings** also updates the Flipper.
+
 At your next Windows sign-in, connect the Flipper and open **StatusDock Settings**. Check that the Flipper shows your saved display, the preview says **Live**, and the clock or measurements update without starting the sender manually.
 
 Press **Back** on the Flipper to leave the display. Open **StatusDock** from **Apps → Tools** to resume. Choose **3** in the Windows launcher to stop the sender, or **4** to remove automatic startup.

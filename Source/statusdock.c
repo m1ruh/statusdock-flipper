@@ -16,6 +16,10 @@
 #define SAMPLE_V3_INVERT_DISPLAY 0x10000000U
 #define SAMPLE_V3_LARGE_CLOCK 0x08000000U
 #define SAMPLE_V3_HIDE_SECONDS 0x04000000U
+// The loader reports one boolean per signal. Acknowledge the saved view in queue order.
+#define VIEW_STATS_SIGNAL 0x53544401U
+#define VIEW_CLOCK_SIGNAL 0x53544402U
+#define VIEW_SAVED_SIGNAL 0x53544403U
 #define SECONDS_PER_DAY 86400U
 #define QUARTERS_PER_SECOND 4U
 #define GPU_UNKNOWN 127U
@@ -35,9 +39,25 @@ typedef struct {
     bool invert_display;
 } DeskSample;
 
+typedef enum {
+    DeskEventSample,
+    DeskEventExit,
+    DeskEventToggleView,
+    DeskEventViewSaved,
+} DeskEventKind;
+
+typedef enum {
+    DeskViewNone,
+    DeskViewStats,
+    DeskViewClock,
+} DeskPendingView;
+
 typedef struct {
-    bool exit;
-    DeskSample sample;
+    DeskEventKind kind;
+    union {
+        DeskSample sample;
+        DeskPendingView saved_view;
+    };
 } DeskEvent;
 
 typedef enum {
@@ -52,6 +72,7 @@ typedef struct {
     DeskSample sample;
     uint32_t clock_seconds;
     DeskScreen screen;
+    DeskPendingView pending_view;
 } DeskApp;
 
 static DeskApp app;
@@ -203,18 +224,32 @@ static void desk_draw(Canvas* canvas, void* context) {
 static void desk_input(InputEvent* input, void* context) {
     DeskApp* app = context;
     if(input->key == InputKeyBack && input->type == InputTypePress) {
-        const DeskEvent event = {.exit = true};
+        const DeskEvent event = {.kind = DeskEventExit};
+        furi_message_queue_put(app->events, &event, 0);
+    } else if(input->key == InputKeyOk && input->type == InputTypeShort) {
+        const DeskEvent event = {.kind = DeskEventToggleView};
         furi_message_queue_put(app->events, &event, 0);
     }
 }
 
 static bool desk_signal(uint32_t signal, void* arg, void* context) {
     UNUSED(context);
+    if(signal == VIEW_STATS_SIGNAL || signal == VIEW_CLOCK_SIGNAL) {
+        FURI_CRITICAL_ENTER();
+        DeskPendingView requested = signal == VIEW_STATS_SIGNAL ? DeskViewStats : DeskViewClock;
+        bool handled = app.events && app.pending_view == requested;
+        FURI_CRITICAL_EXIT();
+        return handled;
+    }
+
     DeskEvent event = {0};
     bool v3 = (signal & SAMPLE_V3_MASK) == SAMPLE_V3_PREFIX;
     bool quarter_clock = v3 || (signal & SAMPLE_V2_MASK) == SAMPLE_V2_PREFIX;
     if(signal == FuriSignalExit) {
-        event.exit = true;
+        event.kind = DeskEventExit;
+    } else if(signal == VIEW_SAVED_SIGNAL && (uintptr_t)arg <= 1U) {
+        event.kind = DeskEventViewSaved;
+        event.saved_view = arg ? DeskViewClock : DeskViewStats;
     } else if(quarter_clock || (signal & SAMPLE_V1_MASK) == SAMPLE_V1_PREFIX) {
         uint32_t packed = (uintptr_t)arg;
         event.sample = (DeskSample){
@@ -272,15 +307,33 @@ int32_t statusdock_app(void* args) {
         DeskEvent event;
         bool received = furi_message_queue_get(app.events, &event, furi_ms_to_ticks(100)) ==
                         FuriStatusOk;
-        if(received && event.exit) break;
+        if(received && event.kind == DeskEventExit) break;
         now = furi_get_tick();
 
-        if(received) {
+        if(received && event.kind == DeskEventToggleView) {
+            furi_mutex_acquire(app.model_mutex, FuriWaitForever);
+            bool live = app.screen == DeskLive;
+            if(live) {
+                app.sample.large_clock = !app.sample.large_clock;
+                FURI_CRITICAL_ENTER();
+                app.pending_view = app.sample.large_clock ? DeskViewClock : DeskViewStats;
+                FURI_CRITICAL_EXIT();
+            }
+            furi_mutex_release(app.model_mutex);
+            if(live) view_port_update(view);
+        } else if(received && event.kind == DeskEventViewSaved) {
+            FURI_CRITICAL_ENTER();
+            if(app.pending_view == event.saved_view) app.pending_view = DeskViewNone;
+            FURI_CRITICAL_EXIT();
+        } else if(received) {
             saw_frame = true;
             last_frame = now;
             furi_mutex_acquire(app.model_mutex, FuriWaitForever);
             bool turn_on = app.screen != DeskLive;
             app.sample = event.sample;
+            if(app.pending_view != DeskViewNone) {
+                app.sample.large_clock = app.pending_view == DeskViewClock;
+            }
             app.clock_seconds = event.sample.clock_quarters / QUARTERS_PER_SECOND;
             app.screen = DeskLive;
             furi_mutex_release(app.model_mutex);

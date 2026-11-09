@@ -135,27 +135,65 @@ function Get-CpuTemperature {
     return 255
 }
 
-function Read-DisplaySettings {
+function Read-SettingsFile {
     try {
         # Allow the settings window to replace its JSON file while it is being read.
         $share = [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
         $reader = [IO.StreamReader]::new([IO.File]::Open($settingsPath, 'Open', 'Read', $share))
-        try {
-            $json = $reader.ReadToEnd()
-        } finally {
-            $reader.Dispose()
-        }
+        try { $json = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    } catch [IO.FileNotFoundException] {
+        return [pscustomobject]@{}
+    }
+    try {
         if ($json.TrimStart().StartsWith('{')) {
-            $settings = ConvertFrom-Json -InputObject $json
-            if ($settings.display -is [string] -and $settings.display -cin @('stats', 'clock') -and
-                $settings.showSeconds -is [bool]) {
-                return $settings
-            }
+            return ConvertFrom-Json -InputObject $json
+        }
+    } catch {
+        # A malformed file has no settings to merge.
+    }
+    return [pscustomobject]@{}
+}
+
+function Read-DisplaySettings {
+    try {
+        $settings = Read-SettingsFile
+        if ($settings.display -is [string] -and $settings.display -cin @('stats', 'clock') -and
+            $settings.showSeconds -is [bool]) {
+            return $settings
         }
     } catch {
         # Missing, unreadable or malformed settings use the standard display.
     }
     return @{ display = 'stats'; showSeconds = $true }
+}
+
+function Save-FlipperView([string]$Display) {
+    $settingsMutex = [Threading.Mutex]::new($false, 'Local\StatusDock-Preferences')
+    $locked = $false
+    $temporary = "$settingsPath.$([Guid]::NewGuid().ToString('N')).tmp"
+    try {
+        try { $locked = $settingsMutex.WaitOne(500) } catch [Threading.AbandonedMutexException] { $locked = $true }
+        if (-not $locked) { return $false }
+        $settings = Read-SettingsFile
+        $settings | Add-Member -NotePropertyName display -NotePropertyValue $Display -Force
+        if ($settings.showSeconds -isnot [bool]) {
+            $settings | Add-Member -NotePropertyName showSeconds -NotePropertyValue $true -Force
+        }
+        [IO.File]::WriteAllText($temporary, (ConvertTo-Json -InputObject $settings -Compress -Depth 100))
+        if ([IO.File]::Exists($settingsPath)) {
+            [IO.File]::Replace($temporary, $settingsPath, [NullString]::Value)
+        } else {
+            [IO.File]::Move($temporary, $settingsPath)
+        }
+        return $true
+    } catch {
+        # Leave the choice pending on the Flipper so the next cycle can retry.
+        return $false
+    } finally {
+        try { [IO.File]::Delete($temporary) } catch { }
+        if ($locked) { $settingsMutex.ReleaseMutex() }
+        $settingsMutex.Dispose()
+    }
 }
 
 function New-DeskSample([DateTime]$Time, [int]$Cpu, [int]$Ram, [int]$Gpu, [int]$CpuTemp, [int]$GpuTemp) {
@@ -244,6 +282,20 @@ function Invoke-FlipperCommand($Serial, [string]$Command) {
         Start-Sleep -Milliseconds 25
     }
     throw 'The Flipper did not respond over USB.'
+}
+
+function Sync-FlipperView($Serial) {
+    # Match VIEW_STATS_SIGNAL, VIEW_CLOCK_SIGNAL and VIEW_SAVED_SIGNAL in the app.
+    if ((Invoke-FlipperCommand $Serial ('loader signal {0} 0' -f 0x53544401)) -match 'was handled') {
+        $display = 'stats'
+    } elseif ((Invoke-FlipperCommand $Serial ('loader signal {0} 0' -f 0x53544402)) -match 'was handled') {
+        $display = 'clock'
+    } else {
+        return
+    }
+    if (Save-FlipperView $display) {
+        $null = Invoke-FlipperCommand $Serial ('loader signal {0} {1}' -f 0x53544403, [int]($display -eq 'clock'))
+    }
 }
 
 function Get-AppState($Serial) {
@@ -354,6 +406,7 @@ try {
                 $lastSensors = $cycle
             }
             $cpu, $ram = [StatusDockMetrics]::Read()
+            Sync-FlipperView $serial
             $sample = New-DeskSample (Get-Date) $cpu $ram $gpu $cpuTemp $gpuTemp
             $reply = Invoke-FlipperCommand $serial $sample.command
             if ($reply -match 'was handled') {
