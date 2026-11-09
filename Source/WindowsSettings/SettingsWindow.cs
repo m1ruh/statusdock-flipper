@@ -1,9 +1,12 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml;
 
@@ -11,6 +14,9 @@ namespace StatusDockPreview
 {
     public partial class SettingsWindow : Window
     {
+        private const int DwmCaptionColor = 35;
+        private const int DwmTextColor = 36;
+
         private static readonly LiveSample Example = new LiveSample
         {
             ClockQuarters = (10 * 3600 + 42 * 60 + 36) * LiveSample.QuartersPerSecond,
@@ -53,6 +59,10 @@ namespace StatusDockPreview
             ClockChoice.IsChecked = settings.Display == "clock";
             StatsChoice.IsChecked = !ClockChoice.IsChecked;
             SecondsChoice.IsChecked = settings.ShowSeconds ?? true;
+            LightThemeChoice.IsChecked = settings.Theme == "light";
+            DarkThemeChoice.IsChecked = !LightThemeChoice.IsChecked;
+            ApplyTheme();
+            SourceInitialized += (sender, e) => ApplyCaptionTheme();
             RefreshPreview(true);
             ready = true;
 
@@ -66,11 +76,51 @@ namespace StatusDockPreview
         {
             if (!ready) return;
             RefreshPreview(true);
+            SaveCurrentSettings();
+        }
 
+        private void OnThemeChanged(object sender, RoutedEventArgs e)
+        {
+            if (!ready) return;
+            ApplyTheme();
+            SaveCurrentSettings();
+        }
+
+        private void ApplyTheme()
+        {
+            string name = LightThemeChoice.IsChecked == true ? "LightTheme" : "DarkTheme";
+            var theme = (ResourceDictionary)Resources[name];
+            var merged = Resources.MergedDictionaries;
+            if (merged.Count == 0) merged.Add(theme);
+            else merged[0] = theme;
+            ApplyCaptionTheme();
+        }
+
+        private void ApplyCaptionTheme()
+        {
+            IntPtr handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero) return;
+            SetCaptionColor(handle, DwmCaptionColor, ((SolidColorBrush)Resources["WindowBackground"]).Color);
+            SetCaptionColor(handle, DwmTextColor, ((SolidColorBrush)Resources["MainText"]).Color);
+        }
+
+        private static void SetCaptionColor(IntPtr handle, int attribute, Color color)
+        {
+            // Windows 11 supports custom caption colors. Earlier versions keep the system caption.
+            int colorRef = color.R | color.G << 8 | color.B << 16;
+            DwmSetWindowAttribute(handle, attribute, ref colorRef, sizeof(int));
+        }
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr handle, int attribute, ref int value, int size);
+
+        private void SaveCurrentSettings()
+        {
             var settings = new PreviewSettings
             {
                 Display = ClockChoice.IsChecked == true ? "clock" : "stats",
-                ShowSeconds = SecondsChoice.IsChecked == true
+                ShowSeconds = SecondsChoice.IsChecked == true,
+                Theme = LightThemeChoice.IsChecked == true ? "light" : "dark"
             };
             try
             {
@@ -174,5 +224,8 @@ namespace StatusDockPreview
 
         [DataMember(Name = "showSeconds")]
         public bool? ShowSeconds;
+
+        [DataMember(Name = "theme")]
+        public string Theme;
     }
 }

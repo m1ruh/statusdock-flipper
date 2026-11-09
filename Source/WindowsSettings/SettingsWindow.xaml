@@ -3,66 +3,131 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="StatusDock Settings" Width="590" SizeToContent="Height"
         ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
-        Background="#F5F3EF" Foreground="#262420" FontFamily="Segoe UI" FontSize="14"
+        Background="{DynamicResource WindowBackground}" Foreground="{DynamicResource MainText}"
+        FontFamily="Segoe UI" FontSize="14"
         UseLayoutRounding="True" xml:lang="en">
     <Window.Resources>
-        <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#5D5953" />
-        </Style>
-        <Style x:Key="DisplayChoice" TargetType="RadioButton">
-            <Setter Property="Padding" Value="12,10" />
-            <Setter Property="Foreground" Value="#262420" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Card" Background="White" BorderBrush="#D7D2C9"
-                                BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                            <StackPanel Orientation="Horizontal">
-                                <Grid Width="16" Height="16" Margin="0,0,9,0">
-                                    <Ellipse x:Name="Ring" Stroke="#6F6A62" StrokeThickness="1.5" />
-                                    <Ellipse x:Name="Dot" Margin="4" Fill="#8A4C12" Visibility="Collapsed" />
+        <ResourceDictionary>
+            <ResourceDictionary x:Key="DarkTheme">
+                <SolidColorBrush x:Key="WindowBackground" Color="#1E1C1A" />
+                <SolidColorBrush x:Key="MainText" Color="#F6EEE4" />
+                <SolidColorBrush x:Key="MutedText" Color="#C4BAB0" />
+                <SolidColorBrush x:Key="Surface" Color="#2A2724" />
+                <SolidColorBrush x:Key="Outline" Color="#514940" />
+                <SolidColorBrush x:Key="ControlOutline" Color="#A49A8F" />
+                <SolidColorBrush x:Key="Hover" Color="#35302A" />
+                <SolidColorBrush x:Key="Selected" Color="#3C2E21" />
+                <SolidColorBrush x:Key="SelectedOutline" Color="#B8824D" />
+                <SolidColorBrush x:Key="Accent" Color="#FFB866" />
+                <SolidColorBrush x:Key="Focus" Color="#8AC7F5" />
+                <SolidColorBrush x:Key="Badge" Color="#38312A" />
+                <SolidColorBrush x:Key="LiveBadge" Color="#254637" />
+                <SolidColorBrush x:Key="ScreenFrame" Color="#100F0E" />
+            </ResourceDictionary>
+            <ResourceDictionary x:Key="LightTheme">
+                <SolidColorBrush x:Key="WindowBackground" Color="#F5F3EF" />
+                <SolidColorBrush x:Key="MainText" Color="#262420" />
+                <SolidColorBrush x:Key="MutedText" Color="#5D5953" />
+                <SolidColorBrush x:Key="Surface" Color="#FFFFFF" />
+                <SolidColorBrush x:Key="Outline" Color="#D7D2C9" />
+                <SolidColorBrush x:Key="ControlOutline" Color="#6F6A62" />
+                <SolidColorBrush x:Key="Hover" Color="#FCF7EF" />
+                <SolidColorBrush x:Key="Selected" Color="#FFF3E0" />
+                <SolidColorBrush x:Key="SelectedOutline" Color="#A46320" />
+                <SolidColorBrush x:Key="Accent" Color="#8A4C12" />
+                <SolidColorBrush x:Key="Focus" Color="#2C6087" />
+                <SolidColorBrush x:Key="Badge" Color="#E9E3D8" />
+                <SolidColorBrush x:Key="LiveBadge" Color="#D1E9D9" />
+                <SolidColorBrush x:Key="ScreenFrame" Color="#2B2824" />
+            </ResourceDictionary>
+            <Style x:Key="SectionLabel" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+            </Style>
+            <Style x:Key="DisplayChoice" TargetType="RadioButton">
+                <Setter Property="Padding" Value="12,10" />
+                <Setter Property="Foreground" Value="{DynamicResource MainText}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Card" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Outline}"
+                                    BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Grid Width="16" Height="16" Margin="0,0,9,0">
+                                        <Ellipse x:Name="Ring" Stroke="{DynamicResource ControlOutline}" StrokeThickness="1.5" />
+                                        <Ellipse x:Name="Dot" Margin="4" Fill="{DynamicResource Accent}" Visibility="Collapsed" />
+                                    </Grid>
+                                    <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True" />
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Card" Property="Background" Value="{DynamicResource Hover}" />
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Card" Property="Background" Value="{DynamicResource Selected}" />
+                                    <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource SelectedOutline}" />
+                                    <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource Accent}" />
+                                    <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource Focus}" />
+                                    <Setter TargetName="Card" Property="BorderThickness" Value="2" />
+                                    <Setter TargetName="Card" Property="Padding" Value="11,9" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="SettingsCheck" TargetType="CheckBox">
+                <Setter Property="Foreground" Value="{DynamicResource MainText}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="CheckBox">
+                            <StackPanel Orientation="Horizontal" Background="Transparent">
+                                <Grid Width="16" Height="16" Margin="0,0,9,0" VerticalAlignment="Center">
+                                    <Border x:Name="Box" BorderBrush="{DynamicResource ControlOutline}"
+                                            BorderThickness="1.5" CornerRadius="3" />
+                                    <Path x:Name="Tick" Data="M 4,8 L 7,11 L 12,5" Stroke="{DynamicResource Accent}"
+                                          StrokeThickness="1.6" Visibility="Collapsed" />
                                 </Grid>
                                 <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True" />
                             </StackPanel>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Card" Property="Background" Value="#FCF7EF" />
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Card" Property="Background" Value="#FFF3E0" />
-                                <Setter TargetName="Card" Property="BorderBrush" Value="#A46320" />
-                                <Setter TargetName="Ring" Property="Stroke" Value="#8A4C12" />
-                                <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Card" Property="BorderBrush" Value="#2C6087" />
-                                <Setter TargetName="Card" Property="BorderThickness" Value="2" />
-                                <Setter TargetName="Card" Property="Padding" Value="11,9" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Box" Property="Background" Value="{DynamicResource Selected}" />
+                                    <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                                    <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Focus}" />
+                                    <Setter TargetName="Box" Property="BorderThickness" Value="2" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
     </Window.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="22,19,22,16">
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Left">
                     <TextBlock Text="StatusDock Settings" FontWeight="SemiBold" FontSize="29" />
-                    <TextBlock Text="Flipper display settings" Foreground="#5D5953" Margin="0,2,0,0" />
+                    <TextBlock Text="Flipper display and Windows appearance" Foreground="{DynamicResource MutedText}"
+                               Margin="0,2,0,0" />
                 </StackPanel>
                 <Border DockPanel.Dock="Right" VerticalAlignment="Top" Margin="0,6,0,0"
                         Padding="9,4" CornerRadius="9">
                     <Border.Style>
                         <Style TargetType="Border">
-                            <Setter Property="Background" Value="#E9E3D8" />
+                            <Setter Property="Background" Value="{DynamicResource Badge}" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Text, ElementName=DataLabel}" Value="Live">
-                                    <Setter Property="Background" Value="#D1E9D9" />
+                                    <Setter Property="Background" Value="{DynamicResource LiveBadge}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -75,10 +140,10 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="PREVIEW" Style="{StaticResource SectionLabel}" />
                     <TextBlock x:Name="NoLiveLabel" Text="No live data" Margin="12,0,0,0"
-                               Foreground="#8A4C12" Style="{StaticResource SectionLabel}" />
+                               Foreground="{DynamicResource Accent}" Style="{StaticResource SectionLabel}" />
                 </StackPanel>
             </DockPanel>
-            <Border Background="#2B2824" CornerRadius="12" Padding="12">
+            <Border Background="{DynamicResource ScreenFrame}" CornerRadius="12" Padding="12">
                 <Image x:Name="PreviewImage" MaxWidth="512" MaxHeight="256" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="NearestNeighbor"
                        AutomationProperties.Name="Flipper display preview" />
@@ -95,12 +160,24 @@
                 <RadioButton x:Name="ClockChoice" Grid.Column="2" GroupName="Display" Content="Large Clock"
                              Style="{StaticResource DisplayChoice}" Checked="OnChoiceChanged" />
             </Grid>
-            <Border Margin="0,10,0,0" Padding="12,10" Background="White"
-                    BorderBrush="#D7D2C9" BorderThickness="1" CornerRadius="8">
-                <CheckBox x:Name="SecondsChoice" Content="Show seconds"
+            <Border Margin="0,10,0,0" Padding="12,10" Background="{DynamicResource Surface}"
+                    BorderBrush="{DynamicResource Outline}" BorderThickness="1" CornerRadius="8">
+                <CheckBox x:Name="SecondsChoice" Content="Show seconds" Style="{StaticResource SettingsCheck}"
                           Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
             </Border>
-            <TextBlock x:Name="SaveStatus" Margin="0,12,0,0" Foreground="#5D5953" FontSize="12"
+            <TextBlock Text="WINDOWS THEME" Margin="0,19,0,7" Style="{StaticResource SectionLabel}" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <RadioButton x:Name="DarkThemeChoice" GroupName="WindowsTheme" Content="Dark"
+                             Style="{StaticResource DisplayChoice}" Checked="OnThemeChanged" />
+                <RadioButton x:Name="LightThemeChoice" Grid.Column="2" GroupName="WindowsTheme" Content="Light"
+                             Style="{StaticResource DisplayChoice}" Checked="OnThemeChanged" />
+            </Grid>
+            <TextBlock x:Name="SaveStatus" Margin="0,12,0,0" Foreground="{DynamicResource MutedText}" FontSize="12"
                        Text="Settings are saved automatically in this folder." TextWrapping="Wrap" />
         </StackPanel>
     </ScrollViewer>

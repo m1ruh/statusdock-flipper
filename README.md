@@ -17,6 +17,8 @@ Open **Windows → StatusDock Settings.exe** and choose **PC Stats** or **Large 
 
 The preview says **Live** after the Flipper accepts fresh measurements. The clock keeps ticking between samples. If the feed stops, the preview says **No live data** and shows labeled sample data until the feed resumes.
 
+**Windows theme** switches the settings window between **Dark** and **Light**. Dark is the default. The choice is saved alongside the display settings.
+
 See [Getting Started](Getting%20Started.md) for installation and sign-in checks.
 
 ## Build
