@@ -8,6 +8,7 @@ namespace StatusDockPreview
     [DataContract]
     internal sealed class LiveSample
     {
+        public const string FileName = "StatusDock Live.json";
         public const int UnknownMetric = 255;
         public const int UnknownGpu = 127;
         public const int QuartersPerSecond = 4;
@@ -33,6 +34,11 @@ namespace StatusDockPreview
 
         [DataMember(Name = "gpuTemp", IsRequired = true)]
         public int GpuTemp;
+
+        public bool IsFreshAt(long utcMs)
+        {
+            return utcMs >= SampledAtUtcMs && utcMs - SampledAtUtcMs < 10000;
+        }
 
         public static LiveSample Read(string path)
         {

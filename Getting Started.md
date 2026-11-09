@@ -11,7 +11,13 @@ StatusDock saves your choices in `Windows/StatusDock Settings.json`.
 
 At your next Windows sign-in, connect the Flipper and open **StatusDock Settings**. Check that the Flipper shows your saved display, the preview says **Live**, and the clock or measurements update without starting the sender manually.
 
-Press **Back** on the Flipper to leave the display. Open **StatusDock** from **Apps → Tools** to resume. Choose **3** in the Windows launcher to stop the sender and release the port for qFlipper, or **4** to remove automatic startup.
+Press **Back** on the Flipper to leave the display. Open **StatusDock** from **Apps → Tools** to resume. Choose **3** in the Windows launcher to stop the sender, or **4** to remove automatic startup.
+
+## Use qFlipper alongside StatusDock
+
+The sender starts the StatusDock icon in the Windows notification area. Its menu shows **Live**, **Disconnected** or **Paused** and includes **Open Settings**.
+
+Choose **Pause** and wait for **Paused** before opening qFlipper. StatusDock releases the USB port at that point. Choose **Resume** to restore the feed. If qFlipper still owns USB, StatusDock shows **Disconnected** and keeps trying until qFlipper releases it.
 
 ## When the PC shuts down
 

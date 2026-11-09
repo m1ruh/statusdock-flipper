@@ -268,6 +268,9 @@ if (-not $created) {
 }
 
 $stopEvent = [Threading.EventWaitHandle]::new($false, 'ManualReset', $stopName)
+$pauseEvent = [Threading.EventWaitHandle]::new($false, 'ManualReset', "Local\StatusDock-Pause-$PID")
+$pausedEvent = [Threading.EventWaitHandle]::new($false, 'ManualReset', "Local\StatusDock-Paused-$PID")
+$wakeEvents = [Threading.WaitHandle[]]@($stopEvent, $pauseEvent)
 $serial = $null
 $wasLive = $false
 $started = $false
@@ -281,7 +284,28 @@ $cpuTemp = 255
 Write-Host 'StatusDock | Press Ctrl+C to stop the connection.'
 try {
     Clear-LiveSample
-    do {
+    $trayExe = Join-Path $PSScriptRoot 'StatusDock Settings.exe'
+    if (Test-Path -LiteralPath $trayExe -PathType Leaf) {
+        try {
+            Start-Process -FilePath $trayExe -ArgumentList '--tray',$PID -WindowStyle Hidden
+        } catch {
+            Write-Host "Could not start the StatusDock tray icon. $($_.Exception.GetBaseException().Message)"
+        }
+    }
+    while (-not $stopEvent.WaitOne(0)) {
+        if ($pauseEvent.WaitOne(0)) {
+            if (-not $pausedEvent.WaitOne(0)) {
+                if ($serial) { $serial.Dispose(); $serial = $null }
+                Clear-LiveSample
+                $wasLive = $false
+                $started = $false
+                $null = $pausedEvent.Set()
+                Write-Status 'Paused. The USB port is available to qFlipper.'
+            }
+            $null = $stopEvent.WaitOne(200)
+            continue
+        }
+        $null = $pausedEvent.Reset()
         try {
             $cycle = [DateTime]::UtcNow
             if (($cycle - $lastCycle).TotalSeconds -ge 15) {
@@ -344,12 +368,16 @@ try {
             if ($serial) { $serial.Dispose(); $serial = $null }
             $wasLive = $false
             Write-Status "Waiting for USB. $($_.Exception.GetBaseException().Message) Close qFlipper and Flipper Lab if they are open."
+        } finally {
+            $null = [Threading.WaitHandle]::WaitAny($wakeEvents, 1750)
         }
-    } while (-not $stopEvent.WaitOne(1750))
+    }
 } finally {
     Clear-LiveSample
     try { [IO.File]::Delete($liveTempPath) } catch { }
     if ($serial) { $serial.Dispose() }
+    $pausedEvent.Dispose()
+    $pauseEvent.Dispose()
     $stopEvent.Dispose()
     $mutex.ReleaseMutex()
     $mutex.Dispose()

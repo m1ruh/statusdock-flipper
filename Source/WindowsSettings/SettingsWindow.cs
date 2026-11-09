@@ -11,7 +11,6 @@ namespace StatusDockPreview
 {
     public partial class SettingsWindow : Window
     {
-        private const int LiveTimeoutMs = 10000;
         private static readonly LiveSample Example = new LiveSample
         {
             ClockQuarters = (10 * 3600 + 42 * 60 + 36) * LiveSample.QuartersPerSecond,
@@ -24,7 +23,7 @@ namespace StatusDockPreview
         private readonly string settingsPath = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "StatusDock Settings.json");
         private readonly string liveSamplePath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "StatusDock Live.json");
+            AppDomain.CurrentDomain.BaseDirectory, LiveSample.FileName);
         private readonly Stopwatch exampleClock = Stopwatch.StartNew();
         private readonly DispatcherTimer previewTimer = new DispatcherTimer();
         private long? drawnSampleUtcMs;
@@ -32,8 +31,15 @@ namespace StatusDockPreview
         private bool ready;
 
         [STAThread]
-        public static void Main()
+        public static void Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "--tray")
+            {
+                int senderId;
+                if (args.Length == 2 && int.TryParse(args[1], out senderId) && senderId > 0)
+                    TrayApplication.Run(senderId);
+                return;
+            }
             new Application().Run(new SettingsWindow());
         }
 
@@ -84,14 +90,16 @@ namespace StatusDockPreview
         private void RefreshPreview(bool force = false)
         {
             var sample = LiveSample.Read(liveSamplePath);
-            long ageMs = sample == null ? 0 : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - sample.SampledAtUtcMs;
-            if (ageMs < 0 || ageMs >= LiveTimeoutMs) sample = null;
+            long utcMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (sample != null && !sample.IsFreshAt(utcMs)) sample = null;
 
             bool isLive = sample != null;
             bool clockOnly = ClockChoice.IsChecked == true;
             bool showSeconds = SecondsChoice.IsChecked == true;
             var displayedSample = sample ?? Example;
-            long elapsedMs = isLive ? (showSeconds ? ageMs : 0) : exampleClock.ElapsedMilliseconds;
+            long elapsedMs = isLive
+                ? (showSeconds ? utcMs - sample.SampledAtUtcMs : 0)
+                : exampleClock.ElapsedMilliseconds;
             long quarters = displayedSample.ClockQuarters + elapsedMs / 250;
             int clockSeconds = (int)(quarters / LiveSample.QuartersPerSecond % LiveSample.SecondsPerDay);
             if (!showSeconds) clockSeconds -= clockSeconds % 60;
