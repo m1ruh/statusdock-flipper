@@ -1,0 +1,26 @@
+# Local preferences and the sender's live snapshot
+/Windows/*.json*
+*.log
+
+# Local installation, rollback and test files
+/Flipper/Backup/
+/Rollback/
+/English Snapshot/
+/.*-check-*/
+*.lnk
+
+# Windows and Flipper build output
+bin/
+obj/
+dist/
+.vs/
+.vscode/
+*.exe
+*.dll
+*.pdb
+*.fap
+*.elf
+*.map
+*.o
+*.obj
+*.impsyms

@@ -1,0 +1,10 @@
+App(
+    appid="statusdock",
+    name="StatusDock",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="statusdock_app",
+    sources=["*.c"],
+    stack_size=3 * 1024,
+    fap_category="Tools",
+    fap_version=(1, 2),
+)
