@@ -70,16 +70,18 @@ static const uint8_t desk_clock_glyphs[][7] = {
 };
 
 static void desk_draw_clock_digits(
-    Canvas* canvas, const char* text, int x, int y, int scale_x, int scale_y) {
+    Canvas* canvas, const char* text, int x, int y, int scale_x, int height) {
     for(; *text; ++text) {
         bool colon = *text == ':';
         const uint8_t* glyph = desk_clock_glyphs[colon ? 10 : *text - '0'];
         int width = colon ? 3 : 5;
         for(int row = 0; row < 7; ++row) {
+            int top = row * height / 7;
+            int row_height = (row + 1) * height / 7 - top;
             for(int column = 0; column < width; ++column) {
                 if(glyph[row] & (1U << (width - 1 - column))) {
                     canvas_draw_box(
-                        canvas, x + column * scale_x, y + row * scale_y, scale_x, scale_y);
+                        canvas, x + column * scale_x, y + top, scale_x, row_height);
                 }
             }
         }
@@ -92,9 +94,9 @@ static void desk_draw_clock_group(
     const char* clock,
     const char* seconds,
     int clock_scale_x,
-    int clock_scale_y,
+    int clock_height,
     int seconds_scale_x,
-    int seconds_scale_y,
+    int seconds_height,
     int gap,
     int bottom) {
     // Digit columns, colon columns and the gaps between characters.
@@ -103,14 +105,14 @@ static void desk_draw_clock_group(
     int width = clock_width + (*seconds ? gap + seconds_width : 0);
     int left = (128 - width) / 2;
     desk_draw_clock_digits(
-        canvas, clock, left, bottom - 7 * clock_scale_y, clock_scale_x, clock_scale_y);
+        canvas, clock, left, bottom - clock_height, clock_scale_x, clock_height);
     desk_draw_clock_digits(
         canvas,
         seconds,
         left + clock_width + gap,
-        bottom - 7 * seconds_scale_y,
+        bottom - seconds_height,
         seconds_scale_x,
-        seconds_scale_y);
+        seconds_height);
 }
 
 static void desk_meter(
@@ -168,17 +170,17 @@ static void desk_draw(Canvas* canvas, void* context) {
     }
     if(sample.large_clock) {
         if(sample.show_seconds) {
-            // Narrower columns fit 21-pixel seconds beside the 28-pixel clock.
-            desk_draw_clock_group(canvas, clock, seconds, 3, 4, 2, 3, 6, 46);
+            // A 21-pixel clock and 16-pixel seconds share a centered baseline.
+            desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 16, 6, 42);
         } else {
-            desk_draw_clock_group(canvas, clock, seconds, 4, 4, 1, 1, 4, 46);
+            desk_draw_clock_group(canvas, clock, seconds, 4, 28, 1, 7, 4, 46);
         }
         return;
     }
 
     canvas_draw_box(canvas, 0, 0, 128, 23);
     canvas_set_color(canvas, ColorWhite);
-    desk_draw_clock_group(canvas, clock, seconds, 3, 3, 2, 2, 6, 22);
+    desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 14, 6, 22);
 
     canvas_set_color(canvas, ColorBlack);
     canvas_set_font(canvas, FontSecondary);
