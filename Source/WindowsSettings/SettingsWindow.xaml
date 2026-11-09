@@ -162,8 +162,12 @@
             </Grid>
             <Border Margin="0,10,0,0" Padding="12,10" Background="{DynamicResource Surface}"
                     BorderBrush="{DynamicResource Outline}" BorderThickness="1" CornerRadius="8">
-                <CheckBox x:Name="SecondsChoice" Content="Show seconds" Style="{StaticResource SettingsCheck}"
-                          Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+                <StackPanel>
+                    <CheckBox x:Name="SecondsChoice" Content="Show seconds" Style="{StaticResource SettingsCheck}"
+                              Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+                    <CheckBox x:Name="InvertChoice" Content="Invert Flipper display" Margin="0,10,0,0"
+                              Style="{StaticResource SettingsCheck}" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+                </StackPanel>
             </Border>
             <TextBlock Text="WINDOWS THEME" Margin="0,19,0,7" Style="{StaticResource SectionLabel}" />
             <Grid>

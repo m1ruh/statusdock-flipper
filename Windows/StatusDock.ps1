@@ -160,11 +160,13 @@ function Read-DisplaySettings {
 
 function New-DeskSample([DateTime]$Time, [int]$Cpu, [int]$Ram, [int]$Gpu, [int]$CpuTemp, [int]$GpuTemp) {
     $settings = Read-DisplaySettings
+    $invert = $settings.invertDisplay -is [bool] -and $settings.invertDisplay
     $clockQuarters = [int][Math]::Floor($Time.TimeOfDay.TotalMilliseconds / 250)
     $prefix = 0x54000000
-    if ($settings.display -eq 'clock' -or -not $settings.showSeconds) {
-        # V3 keeps the V2 GPU/time payload and uses bits 27 and 26 for display settings.
+    if ($settings.display -eq 'clock' -or -not $settings.showSeconds -or $invert) {
+        # V3 keeps the V2 GPU/time payload and uses bits 28 through 26 for display settings.
         $prefix = 0x60000000
+        if ($invert) { $prefix = $prefix -bor 0x10000000 }
         if ($settings.display -eq 'clock') { $prefix = $prefix -bor 0x08000000 }
         if (-not $settings.showSeconds) { $prefix = $prefix -bor 0x04000000 }
     }

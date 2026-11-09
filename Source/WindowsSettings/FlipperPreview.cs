@@ -17,6 +17,10 @@ namespace StatusDockPreview
             Color.FromRgb(255, 174, 76),
             Color.FromRgb(43, 31, 20)
         });
+        private static readonly BitmapPalette InvertedPalette = new BitmapPalette(new[]
+        {
+            Palette.Colors[Dark], Palette.Colors[Light]
+        });
 
         // Five-bit rows for the 5 × 7 pixel font. Space and colon use three columns.
         private static readonly Dictionary<char, byte[]> Glyphs = new Dictionary<char, byte[]>
@@ -47,7 +51,7 @@ namespace StatusDockPreview
         private readonly byte[] pixels = new byte[Width * Height];
 
         public static BitmapSource Render(
-            LiveSample sample, int clockSeconds, bool clockOnly, bool showSeconds)
+            LiveSample sample, int clockSeconds, bool clockOnly, bool showSeconds, bool invertDisplay)
         {
             var preview = new FlipperPreview();
             var time = TimeSpan.FromSeconds(clockSeconds);
@@ -61,7 +65,7 @@ namespace StatusDockPreview
                 preview.DrawStats(sample, clock, seconds);
 
             var bitmap = BitmapSource.Create(Width, Height, 96, 96, PixelFormats.Indexed8,
-                Palette, preview.pixels, Width);
+                invertDisplay ? InvertedPalette : Palette, preview.pixels, Width);
             bitmap.Freeze();
             return bitmap;
         }

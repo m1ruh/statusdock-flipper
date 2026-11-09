@@ -12,7 +12,8 @@
 #define SAMPLE_V2_PREFIX 0x54000000U
 #define SAMPLE_V2_MASK 0xFC000000U
 #define SAMPLE_V3_PREFIX 0x60000000U
-#define SAMPLE_V3_MASK 0xF0000000U
+#define SAMPLE_V3_MASK 0xE0000000U
+#define SAMPLE_V3_INVERT_DISPLAY 0x10000000U
 #define SAMPLE_V3_LARGE_CLOCK 0x08000000U
 #define SAMPLE_V3_HIDE_SECONDS 0x04000000U
 #define SECONDS_PER_DAY 86400U
@@ -31,6 +32,7 @@ typedef struct {
     uint8_t gpu_temp;
     bool large_clock;
     bool show_seconds;
+    bool invert_display;
 } DeskSample;
 
 typedef struct {
@@ -157,6 +159,15 @@ static void desk_draw(Canvas* canvas, void* context) {
         return;
     }
 
+    Color foreground = ColorBlack;
+    Color background = ColorWhite;
+    if(sample.invert_display) {
+        canvas_draw_box(canvas, 0, 0, 128, 64);
+        foreground = ColorWhite;
+        background = ColorBlack;
+    }
+    canvas_set_color(canvas, foreground);
+
     char clock[6];
     snprintf(
         clock,
@@ -179,10 +190,10 @@ static void desk_draw(Canvas* canvas, void* context) {
     }
 
     canvas_draw_box(canvas, 0, 0, 128, 23);
-    canvas_set_color(canvas, ColorWhite);
+    canvas_set_color(canvas, background);
     desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 14, 6, 22);
 
-    canvas_set_color(canvas, ColorBlack);
+    canvas_set_color(canvas, foreground);
     canvas_set_font(canvas, FontSecondary);
     desk_meter(canvas, 35, "CPU", sample.cpu, sample.cpu_temp);
     desk_meter(canvas, 48, "RAM", sample.ram, METRIC_UNKNOWN);
@@ -216,6 +227,7 @@ static bool desk_signal(uint32_t signal, void* arg, void* context) {
             .gpu_temp = packed & 0xFFU,
             .large_clock = v3 && (signal & SAMPLE_V3_LARGE_CLOCK),
             .show_seconds = quarter_clock && !(v3 && (signal & SAMPLE_V3_HIDE_SECONDS)),
+            .invert_display = v3 && (signal & SAMPLE_V3_INVERT_DISPLAY),
         };
         if(event.sample.clock_quarters >= SECONDS_PER_DAY * QUARTERS_PER_SECOND ||
            (event.sample.gpu > 100 && event.sample.gpu != GPU_UNKNOWN) ||

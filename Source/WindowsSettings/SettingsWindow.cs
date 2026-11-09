@@ -59,6 +59,7 @@ namespace StatusDockPreview
             ClockChoice.IsChecked = settings.Display == "clock";
             StatsChoice.IsChecked = !ClockChoice.IsChecked;
             SecondsChoice.IsChecked = settings.ShowSeconds ?? true;
+            InvertChoice.IsChecked = settings.InvertDisplay ?? false;
             LightThemeChoice.IsChecked = settings.Theme == "light";
             DarkThemeChoice.IsChecked = !LightThemeChoice.IsChecked;
             ApplyTheme();
@@ -120,7 +121,8 @@ namespace StatusDockPreview
             {
                 Display = ClockChoice.IsChecked == true ? "clock" : "stats",
                 ShowSeconds = SecondsChoice.IsChecked == true,
-                Theme = LightThemeChoice.IsChecked == true ? "light" : "dark"
+                Theme = LightThemeChoice.IsChecked == true ? "light" : "dark",
+                InvertDisplay = InvertChoice.IsChecked == true
             };
             try
             {
@@ -146,6 +148,7 @@ namespace StatusDockPreview
             bool isLive = sample != null;
             bool clockOnly = ClockChoice.IsChecked == true;
             bool showSeconds = SecondsChoice.IsChecked == true;
+            bool invertDisplay = InvertChoice.IsChecked == true;
             var displayedSample = sample ?? Example;
             long elapsedMs = isLive
                 ? (showSeconds ? utcMs - sample.SampledAtUtcMs : 0)
@@ -162,10 +165,12 @@ namespace StatusDockPreview
 
             DataLabel.Text = isLive ? "Live" : "Sample data";
             NoLiveLabel.Visibility = isLive ? Visibility.Collapsed : Visibility.Visible;
-            PreviewImage.Source = FlipperPreview.Render(displayedSample, clockSeconds, clockOnly, showSeconds);
+            PreviewImage.Source = FlipperPreview.Render(
+                displayedSample, clockSeconds, clockOnly, showSeconds, invertDisplay);
             System.Windows.Automation.AutomationProperties.SetHelpText(PreviewImage,
                 (clockOnly ? "Large Clock" : "PC Stats") +
                 (showSeconds ? " with seconds. " : " without seconds. ") +
+                (invertDisplay ? "Inverted display. " : "") +
                 (isLive ? "Live." : "No live data. Showing sample data."));
         }
 
@@ -227,5 +232,8 @@ namespace StatusDockPreview
 
         [DataMember(Name = "theme")]
         public string Theme;
+
+        [DataMember(Name = "invertDisplay")]
+        public bool? InvertDisplay;
     }
 }

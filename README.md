@@ -19,6 +19,8 @@ The preview says **Live** after the Flipper accepts fresh measurements. The cloc
 
 **Windows theme** switches the settings window between **Dark** and **Light**. Dark is the default. The choice is saved alongside the display settings.
 
+**Invert Flipper display** reverses the preview and the live Flipper display in either view. It is off by default and takes effect on the Flipper with the next live update.
+
 See [Getting Started](Getting%20Started.md) for installation and sign-in checks.
 
 ## Build
