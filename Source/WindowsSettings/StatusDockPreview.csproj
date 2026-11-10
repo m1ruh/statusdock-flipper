@@ -22,6 +22,7 @@
     <Page Include="SettingsWindow.xaml" />
     <Compile Include="SettingsWindow.cs" />
     <Compile Include="FlipperPreview.cs" />
+    <Compile Include="StatsLayout.cs" />
     <Compile Include="LiveSample.cs" />
     <Compile Include="TrayApplication.cs" />
   </ItemGroup>

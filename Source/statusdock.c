@@ -5,6 +5,7 @@
 #include <notification/notification_messages.h>
 #include <power/power_service/power.h>
 #include <stdio.h>
+#include <string.h>
 
 // The loader's signal and argument carry one complete Windows sample.
 #define SAMPLE_V1_PREFIX 0x50440000U
@@ -20,6 +21,7 @@
 #define VIEW_STATS_SIGNAL 0x53544401U
 #define VIEW_CLOCK_SIGNAL 0x53544402U
 #define VIEW_SAVED_SIGNAL 0x53544403U
+#define STATS_LAYOUT_SIGNAL 0x53544404U
 #define SECONDS_PER_DAY 86400U
 #define QUARTERS_PER_SECOND 4U
 #define GPU_UNKNOWN 127U
@@ -40,10 +42,39 @@ typedef struct {
 } DeskSample;
 
 typedef enum {
+    DeskAlignCenter,
+    DeskAlignLeft,
+    DeskAlignRight,
+} DeskClockAlignment;
+
+typedef enum {
+    DeskCpu,
+    DeskRam,
+    DeskGpu,
+} DeskMetric;
+
+typedef struct {
+    DeskClockAlignment alignment;
+    uint8_t order;
+    bool numbers_only;
+} DeskLayout;
+
+// Match StatsLayout.cs. Index zero preserves the original metric order.
+static const DeskMetric desk_orders[][3] = {
+    {DeskCpu, DeskRam, DeskGpu},
+    {DeskCpu, DeskGpu, DeskRam},
+    {DeskRam, DeskCpu, DeskGpu},
+    {DeskRam, DeskGpu, DeskCpu},
+    {DeskGpu, DeskCpu, DeskRam},
+    {DeskGpu, DeskRam, DeskCpu},
+};
+
+typedef enum {
     DeskEventSample,
     DeskEventExit,
     DeskEventToggleView,
     DeskEventViewSaved,
+    DeskEventLayout,
 } DeskEventKind;
 
 typedef enum {
@@ -57,6 +88,7 @@ typedef struct {
     union {
         DeskSample sample;
         DeskPendingView saved_view;
+        DeskLayout layout;
     };
 } DeskEvent;
 
@@ -70,6 +102,7 @@ typedef struct {
     FuriMessageQueue* events;
     FuriMutex* model_mutex;
     DeskSample sample;
+    DeskLayout layout;
     uint32_t clock_seconds;
     DeskScreen screen;
     DeskPendingView pending_view;
@@ -77,8 +110,9 @@ typedef struct {
 
 static DeskApp app;
 
-// These 5 × 7 digits match the Windows preview. The last glyph is the colon.
-static const uint8_t desk_clock_glyphs[][7] = {
+// Match the 5 × 7 glyphs in FlipperPreview.cs.
+static const char desk_glyph_chars[] = "0123456789:-% ACGMPRU";
+static const uint8_t desk_glyphs[][7] = {
     {14, 17, 17, 17, 17, 17, 14},
     {4, 12, 4, 4, 4, 4, 14},
     {14, 17, 1, 6, 8, 16, 31},
@@ -90,14 +124,39 @@ static const uint8_t desk_clock_glyphs[][7] = {
     {14, 17, 17, 14, 17, 17, 14},
     {14, 17, 17, 15, 1, 1, 14},
     {0, 0, 2, 2, 0, 2, 2},
+    {0, 0, 0, 31, 0, 0, 0},
+    {25, 26, 4, 4, 4, 11, 19},
+    {0, 0, 0, 0, 0, 0, 0},
+    {14, 17, 17, 31, 17, 17, 17},
+    {14, 17, 16, 16, 16, 17, 14},
+    {14, 17, 16, 23, 17, 17, 15},
+    {17, 27, 21, 21, 17, 17, 17},
+    {30, 17, 17, 30, 16, 16, 16},
+    {30, 17, 17, 30, 20, 18, 17},
+    {17, 17, 17, 17, 17, 17, 14},
 };
 
-static void desk_draw_clock_digits(
+static int desk_glyph_width(char character) {
+    return character == ':' || character == ' ' ? 3 : 5;
+}
+
+static int desk_text_width(const char* text, int scale_x) {
+    if(!*text) return 0;
+    int columns = -1;
+    for(; *text; ++text) columns += desk_glyph_width(*text) + 1;
+    return columns * scale_x;
+}
+
+static void desk_draw_text(
     Canvas* canvas, const char* text, int x, int y, int scale_x, int height) {
     for(; *text; ++text) {
-        bool colon = *text == ':';
-        const uint8_t* glyph = desk_clock_glyphs[colon ? 10 : *text - '0'];
-        int width = colon ? 3 : 5;
+        const char* character = strchr(desk_glyph_chars, *text);
+        int width = desk_glyph_width(*text);
+        if(!character) {
+            x += (width + 1) * scale_x;
+            continue;
+        }
+        const uint8_t* glyph = desk_glyphs[character - desk_glyph_chars];
         for(int row = 0; row < 7; ++row) {
             int top = row * height / 7;
             int row_height = (row + 1) * height / 7 - top;
@@ -121,15 +180,16 @@ static void desk_draw_clock_group(
     int seconds_scale_x,
     int seconds_height,
     int gap,
-    int bottom) {
-    // Digit columns, colon columns and the gaps between characters.
-    int clock_width = (4 * 5 + 3 + 4) * clock_scale_x;
-    int seconds_width = (2 * 5 + 3 + 2) * seconds_scale_x;
-    int width = clock_width + (*seconds ? gap + seconds_width : 0);
+    int bottom,
+    DeskClockAlignment alignment) {
+    int clock_width = desk_text_width(clock, clock_scale_x);
+    int width = clock_width + (*seconds ? gap + desk_text_width(seconds, seconds_scale_x) : 0);
     int left = (128 - width) / 2;
-    desk_draw_clock_digits(
+    if(alignment == DeskAlignLeft) left = 3;
+    if(alignment == DeskAlignRight) left = 128 - width - 3;
+    desk_draw_text(
         canvas, clock, left, bottom - clock_height, clock_scale_x, clock_height);
-    desk_draw_clock_digits(
+    desk_draw_text(
         canvas,
         seconds,
         left + clock_width + gap,
@@ -143,21 +203,28 @@ static void desk_meter(
     uint8_t baseline,
     const char* label,
     uint8_t percent,
-    uint8_t temp) {
+    uint8_t temp,
+    bool numbers_only) {
     char text[10];
-    canvas_draw_str(canvas, 2, baseline, label);
-    canvas_draw_frame(canvas, 26, baseline - 7, 43, 7);
+    desk_draw_text(canvas, label, 2, baseline - 7, 1, 7);
     if(percent <= 100) {
-        uint8_t width = (41U * percent + 50U) / 100U;
-        if(width) canvas_draw_box(canvas, 27, baseline - 6, width, 5);
         snprintf(text, sizeof(text), "%u%%", (unsigned)percent);
     } else {
         snprintf(text, sizeof(text), "--");
     }
-    canvas_draw_str_aligned(canvas, 95, baseline, AlignRight, AlignBottom, text);
+    if(!numbers_only) {
+        canvas_draw_frame(canvas, 26, baseline - 7, 43, 7);
+        if(percent <= 100) {
+            uint8_t width = (41U * percent + 50U) / 100U;
+            if(width) canvas_draw_box(canvas, 27, baseline - 6, width, 5);
+        }
+    }
+    int scale = numbers_only ? 2 : 1;
+    int height = numbers_only ? 11 : 7;
+    desk_draw_text(canvas, text, 95 - desk_text_width(text, scale), baseline - height, scale, height);
     if(temp != METRIC_UNKNOWN) {
         snprintf(text, sizeof(text), "%u C", (unsigned)temp);
-        canvas_draw_str_aligned(canvas, 126, baseline, AlignRight, AlignBottom, text);
+        desk_draw_text(canvas, text, 126 - desk_text_width(text, 1), baseline - 7, 1, 7);
     }
 }
 
@@ -166,6 +233,7 @@ static void desk_draw(Canvas* canvas, void* context) {
     furi_mutex_acquire(app->model_mutex, FuriWaitForever);
     DeskScreen screen = app->screen;
     DeskSample sample = app->sample;
+    DeskLayout layout = app->layout;
     uint32_t clock_seconds = app->clock_seconds;
     furi_mutex_release(app->model_mutex);
 
@@ -203,22 +271,27 @@ static void desk_draw(Canvas* canvas, void* context) {
     if(sample.large_clock) {
         if(sample.show_seconds) {
             // A 21-pixel clock and 16-pixel seconds share a centered baseline.
-            desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 16, 6, 42);
+            desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 16, 6, 42, DeskAlignCenter);
         } else {
-            desk_draw_clock_group(canvas, clock, seconds, 4, 28, 1, 7, 4, 46);
+            desk_draw_clock_group(canvas, clock, seconds, 4, 28, 1, 7, 4, 46, DeskAlignCenter);
         }
         return;
     }
 
     canvas_draw_box(canvas, 0, 0, 128, 23);
     canvas_set_color(canvas, background);
-    desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 14, 6, 22);
+    desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 14, 6, 22, layout.alignment);
 
     canvas_set_color(canvas, foreground);
-    canvas_set_font(canvas, FontSecondary);
-    desk_meter(canvas, 35, "CPU", sample.cpu, sample.cpu_temp);
-    desk_meter(canvas, 48, "RAM", sample.ram, METRIC_UNKNOWN);
-    desk_meter(canvas, 61, "GPU", sample.gpu, sample.gpu_temp);
+    const char* labels[] = {"CPU", "RAM", "GPU"};
+    const uint8_t percents[] = {sample.cpu, sample.ram, sample.gpu};
+    const uint8_t temperatures[] = {sample.cpu_temp, METRIC_UNKNOWN, sample.gpu_temp};
+    for(uint8_t row = 0; row < 3; ++row) {
+        DeskMetric metric = desk_orders[layout.order][row];
+        desk_meter(
+            canvas, 35 + row * 13, labels[metric], percents[metric], temperatures[metric],
+            layout.numbers_only);
+    }
 }
 
 static void desk_input(InputEvent* input, void* context) {
@@ -250,6 +323,15 @@ static bool desk_signal(uint32_t signal, void* arg, void* context) {
     } else if(signal == VIEW_SAVED_SIGNAL && (uintptr_t)arg <= 1U) {
         event.kind = DeskEventViewSaved;
         event.saved_view = arg ? DeskViewClock : DeskViewStats;
+    } else if(signal == STATS_LAYOUT_SIGNAL) {
+        // Two alignment bits, three order bits, then the Numbers only flag.
+        uint32_t packed = (uintptr_t)arg;
+        uint32_t alignment = packed & 3U;
+        uint32_t order = (packed >> 2) & 7U;
+        if(packed > 63U || alignment > DeskAlignRight || order >= COUNT_OF(desk_orders))
+            return false;
+        event.kind = DeskEventLayout;
+        event.layout = (DeskLayout){alignment, order, (packed & 32U) != 0};
     } else if(quarter_clock || (signal & SAMPLE_V1_MASK) == SAMPLE_V1_PREFIX) {
         uint32_t packed = (uintptr_t)arg;
         event.sample = (DeskSample){
@@ -302,6 +384,7 @@ int32_t statusdock_app(void* args) {
     bool saw_frame = false;
     bool saw_power = furi_hal_power_get_usb_voltage() >= 4.0f;
     bool power_off_requested = false;
+    DeskLayout pending_layout = {0};
     const uint32_t quarter_ticks = furi_ms_to_ticks(250);
     while(true) {
         DeskEvent event;
@@ -325,12 +408,16 @@ int32_t statusdock_app(void* args) {
             FURI_CRITICAL_ENTER();
             if(app.pending_view == event.saved_view) app.pending_view = DeskViewNone;
             FURI_CRITICAL_EXIT();
+        } else if(received && event.kind == DeskEventLayout) {
+            // Apply the layout and telemetry together on the next frame.
+            pending_layout = event.layout;
         } else if(received) {
             saw_frame = true;
             last_frame = now;
             furi_mutex_acquire(app.model_mutex, FuriWaitForever);
             bool turn_on = app.screen != DeskLive;
             app.sample = event.sample;
+            app.layout = pending_layout;
             if(app.pending_view != DeskViewNone) {
                 app.sample.large_clock = app.pending_view == DeskViewClock;
             }

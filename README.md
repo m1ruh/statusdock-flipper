@@ -17,6 +17,8 @@ Open **Windows → StatusDock Settings.exe** and choose **PC Stats** or **Large 
 
 The preview says **Live** after the Flipper accepts fresh measurements. The clock keeps ticking between samples. If the feed stops, the preview says **No live data** and shows labeled sample data until the feed resumes.
 
+In **PC Stats**, use **Layout** to align the clock, move the CPU, RAM, and GPU rows, or choose **Numbers only** for larger percentages. Temperatures stay visible when available. Changes appear immediately in the preview and on the next live update on the Flipper. **Reset layout** restores the centered clock, CPU/RAM/GPU order, and **Bars + numbers**.
+
 **Windows theme** switches the settings window between **Dark** and **Light**. Dark is the default. The choice is saved alongside the display settings.
 
 **Invert Flipper display** reverses the preview and the live Flipper display in either view. It is off by default and takes effect on the Flipper with the next live update.

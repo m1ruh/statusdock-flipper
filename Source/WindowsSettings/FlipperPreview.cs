@@ -51,7 +51,8 @@ namespace StatusDockPreview
         private readonly byte[] pixels = new byte[Width * Height];
 
         public static BitmapSource Render(
-            LiveSample sample, int clockSeconds, bool clockOnly, bool showSeconds, bool invertDisplay)
+            LiveSample sample, int clockSeconds, bool clockOnly, bool showSeconds, bool invertDisplay,
+            StatsLayout layout)
         {
             var preview = new FlipperPreview();
             var time = TimeSpan.FromSeconds(clockSeconds);
@@ -62,7 +63,7 @@ namespace StatusDockPreview
             else if (clockOnly)
                 preview.DrawClockGroup(clock, seconds, 4, 28, 1, 7, 4, 46, Dark);
             else
-                preview.DrawStats(sample, clock, seconds);
+                preview.DrawStats(sample, clock, seconds, layout);
 
             var bitmap = BitmapSource.Create(Width, Height, 96, 96, PixelFormats.Indexed8,
                 invertDisplay ? InvertedPalette : Palette, preview.pixels, Width);
@@ -70,48 +71,66 @@ namespace StatusDockPreview
             return bitmap;
         }
 
-        private void DrawStats(LiveSample sample, string clock, string seconds)
+        private void DrawStats(LiveSample sample, string clock, string seconds, StatsLayout layout)
         {
             // Header, meter rows and alignment follow desk_draw and desk_meter in statusdock.c.
             Fill(0, 0, Width, 23, Dark);
-            DrawClockGroup(clock, seconds, 3, 21, 2, 14, 6, 22, Light);
+            DrawClockGroup(clock, seconds, 3, 21, 2, 14, 6, 22, Light, layout.Alignment);
 
-            DrawMeter("CPU", 35, sample.Cpu, sample.CpuTemp);
-            DrawMeter("RAM", 48, sample.Ram, LiveSample.UnknownMetric);
-            DrawMeter("GPU", 61, sample.Gpu, sample.GpuTemp);
+            for (int row = 0; row < 3; row++)
+            {
+                int baseline = 35 + row * 13;
+                switch (layout.RowAt(row))
+                {
+                    case StatsMetric.Cpu:
+                        DrawMeter("CPU", baseline, sample.Cpu, sample.CpuTemp, layout.NumbersOnly);
+                        break;
+                    case StatsMetric.Ram:
+                        DrawMeter("RAM", baseline, sample.Ram, LiveSample.UnknownMetric, layout.NumbersOnly);
+                        break;
+                    case StatsMetric.Gpu:
+                        DrawMeter("GPU", baseline, sample.Gpu, sample.GpuTemp, layout.NumbersOnly);
+                        break;
+                }
+            }
         }
 
         private void DrawClockGroup(
             string clock, string seconds, int clockScaleX, int clockHeight, int secondsScaleX,
-            int secondsHeight, int gap, int bottom, byte color)
+            int secondsHeight, int gap, int bottom, byte color, ClockAlignment alignment = ClockAlignment.Center)
         {
             int clockWidth = TextWidth(clock, clockScaleX);
             int totalWidth = clockWidth + (seconds.Length > 0 ? gap + TextWidth(seconds, secondsScaleX) : 0);
             int left = (Width - totalWidth) / 2;
+            if (alignment == ClockAlignment.Left) left = 3;
+            if (alignment == ClockAlignment.Right) left = Width - totalWidth - 3;
             DrawText(clock, left, bottom - clockHeight, clockScaleX, color, clockHeight);
             DrawText(seconds, left + clockWidth + gap, bottom - secondsHeight, secondsScaleX,
                 color, secondsHeight);
         }
 
-        private void DrawMeter(string label, int baseline, int percent, int temperature)
+        private void DrawMeter(string label, int baseline, int percent, int temperature, bool numbersOnly)
         {
             DrawText(label, 2, baseline - 7, 1, Dark);
-            Fill(26, baseline - 7, 43, 7, Dark);
-            Fill(27, baseline - 6, 41, 5, Light);
-            string value = "--";
-            if (percent <= 100)
+            string value = percent <= 100 ? percent.ToString(CultureInfo.InvariantCulture) + "%" : "--";
+            if (numbersOnly)
             {
-                Fill(27, baseline - 6, (41 * percent + 50) / 100, 5, Dark);
-                value = percent.ToString(CultureInfo.InvariantCulture) + "%";
+                DrawRight(value, 95, baseline - 11, Dark, 2, 11);
             }
-            DrawRight(value, 95, baseline - 7, Dark);
+            else
+            {
+                Fill(26, baseline - 7, 43, 7, Dark);
+                Fill(27, baseline - 6, 41, 5, Light);
+                if (percent <= 100) Fill(27, baseline - 6, (41 * percent + 50) / 100, 5, Dark);
+                DrawRight(value, 95, baseline - 7, Dark);
+            }
             if (temperature != LiveSample.UnknownMetric)
                 DrawRight(temperature.ToString(CultureInfo.InvariantCulture) + " C", 126, baseline - 7, Dark);
         }
 
-        private void DrawRight(string text, int right, int y, byte color)
+        private void DrawRight(string text, int right, int y, byte color, int scale = 1, int height = 7)
         {
-            DrawText(text, right - TextWidth(text, 1), y, 1, color);
+            DrawText(text, right - TextWidth(text, scale), y, scale, color, height);
         }
 
         private static int TextWidth(string text, int scale)

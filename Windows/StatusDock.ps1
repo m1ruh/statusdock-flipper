@@ -199,6 +199,11 @@ function Save-FlipperView([string]$Display) {
 function New-DeskSample([DateTime]$Time, [int]$Cpu, [int]$Ram, [int]$Gpu, [int]$CpuTemp, [int]$GpuTemp) {
     $settings = Read-DisplaySettings
     $invert = $settings.invertDisplay -is [bool] -and $settings.invertDisplay
+    $layout = $settings.pcStatsLayout
+    if (($layout -isnot [int] -and $layout -isnot [long]) -or
+        $layout -lt 0 -or $layout -gt 63 -or ($layout -band 3) -gt 2 -or (($layout -shr 2) -band 7) -gt 5) {
+        $layout = 0
+    }
     $clockQuarters = [int][Math]::Floor($Time.TimeOfDay.TotalMilliseconds / 250)
     $prefix = 0x54000000
     if ($settings.display -eq 'clock' -or -not $settings.showSeconds -or $invert) {
@@ -212,6 +217,7 @@ function New-DeskSample([DateTime]$Time, [int]$Cpu, [int]$Ram, [int]$Gpu, [int]$
     # Formatting the four bytes separately avoids signed integer conversion on Windows PowerShell 5.1.
     return @{
         command = 'loader signal {0} {1:X2}{2:X2}{3:X2}{4:X2}' -f $signal, $Cpu, $Ram, $CpuTemp, $GpuTemp
+        layoutCommand = 'loader signal {0} {1:X}' -f 0x53544404, $layout
         sampledAtUtcMs = ([DateTimeOffset]$Time).ToUnixTimeMilliseconds()
         clockQuarters = $clockQuarters
         cpu = $Cpu
@@ -408,6 +414,8 @@ try {
             $cpu, $ram = [StatusDockMetrics]::Read()
             Sync-FlipperView $serial
             $sample = New-DeskSample (Get-Date) $cpu $ram $gpu $cpuTemp $gpuTemp
+            # Send the PC Stats layout before the sample. Older apps still accept the sample.
+            $null = Invoke-FlipperCommand $serial $sample.layoutCommand
             $reply = Invoke-FlipperCommand $serial $sample.command
             if ($reply -match 'was handled') {
                 $wasLive = $true

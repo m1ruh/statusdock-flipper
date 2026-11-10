@@ -1,11 +1,14 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Threading;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -36,6 +39,7 @@ namespace StatusDockPreview
         private long? drawnSampleUtcMs;
         private int drawnClockSeconds = -1;
         private bool ready;
+        private StatsLayout layout;
 
         [STAThread]
         public static void Main(string[] args)
@@ -63,6 +67,8 @@ namespace StatusDockPreview
             InvertChoice.IsChecked = settings.InvertDisplay ?? false;
             LightThemeChoice.IsChecked = settings.Theme == "light";
             DarkThemeChoice.IsChecked = !LightThemeChoice.IsChecked;
+            layout = new StatsLayout(settings.PcStatsLayout);
+            UpdateLayoutControls();
             ApplyTheme();
             SourceInitialized += (sender, e) => ApplyCaptionTheme();
             RefreshPreview(true);
@@ -91,6 +97,66 @@ namespace StatusDockPreview
             if (!ready) return;
             ApplyTheme();
             SaveCurrentSettings(settings => settings.Theme = LightThemeChoice.IsChecked == true ? "light" : "dark");
+        }
+
+        private void OnLayoutChoice(object sender, RoutedEventArgs e)
+        {
+            if (!ready) return;
+            layout.Alignment = AlignLeft.IsChecked == true ? ClockAlignment.Left :
+                AlignRight.IsChecked == true ? ClockAlignment.Right : ClockAlignment.Center;
+            layout.NumbersOnly = NumbersOnly.IsChecked == true;
+            SaveLayout();
+        }
+
+        private void OnRowUp(object sender, RoutedEventArgs e) { MoveRow((Button)sender, -1); }
+        private void OnRowDown(object sender, RoutedEventArgs e) { MoveRow((Button)sender, 1); }
+
+        private void MoveRow(Button button, int offset)
+        {
+            int index = int.Parse((string)button.Tag, CultureInfo.InvariantCulture);
+            layout.MoveRow(index, offset);
+            UpdateLayoutControls();
+            SaveLayout();
+        }
+
+        private void OnResetLayout(object sender, RoutedEventArgs e)
+        {
+            layout = new StatsLayout(0);
+            UpdateLayoutControls();
+            SaveLayout();
+        }
+
+        private void UpdateLayoutControls()
+        {
+            bool wasReady = ready;
+            ready = false;
+            try
+            {
+                AlignLeft.IsChecked = layout.Alignment == ClockAlignment.Left;
+                AlignCenter.IsChecked = layout.Alignment == ClockAlignment.Center;
+                AlignRight.IsChecked = layout.Alignment == ClockAlignment.Right;
+                NumbersOnly.IsChecked = layout.NumbersOnly;
+                ShowBars.IsChecked = !layout.NumbersOnly;
+                var labels = new[] { Row0Label, Row1Label, Row2Label };
+                var up = new[] { Row0Up, Row1Up, Row2Up };
+                var down = new[] { Row0Down, Row1Down, Row2Down };
+                for (int index = 0; index < labels.Length; index++)
+                {
+                    string metric = layout.RowAt(index).ToString().ToUpperInvariant();
+                    labels[index].Text = metric;
+                    AutomationProperties.SetName(up[index], "Move " + metric + " up");
+                    AutomationProperties.SetName(down[index], "Move " + metric + " down");
+                    up[index].IsEnabled = index > 0;
+                    down[index].IsEnabled = index < labels.Length - 1;
+                }
+            }
+            finally { ready = wasReady; }
+        }
+
+        private void SaveLayout()
+        {
+            SaveCurrentSettings(settings => settings.PcStatsLayout = layout.Packed);
+            RefreshPreview(true);
         }
 
         private void ApplyTheme()
@@ -180,6 +246,7 @@ namespace StatusDockPreview
 
             bool isLive = sample != null;
             bool clockOnly = ClockChoice.IsChecked == true;
+            LayoutSection.Visibility = clockOnly ? Visibility.Collapsed : Visibility.Visible;
             bool showSeconds = SecondsChoice.IsChecked == true;
             bool invertDisplay = InvertChoice.IsChecked == true;
             var displayedSample = sample ?? Example;
@@ -199,8 +266,8 @@ namespace StatusDockPreview
             DataLabel.Text = isLive ? "Live" : "Sample data";
             NoLiveLabel.Visibility = isLive ? Visibility.Collapsed : Visibility.Visible;
             PreviewImage.Source = FlipperPreview.Render(
-                displayedSample, clockSeconds, clockOnly, showSeconds, invertDisplay);
-            System.Windows.Automation.AutomationProperties.SetHelpText(PreviewImage,
+                displayedSample, clockSeconds, clockOnly, showSeconds, invertDisplay, layout);
+            AutomationProperties.SetHelpText(PreviewImage,
                 (clockOnly ? "Large Clock" : "PC Stats") +
                 (showSeconds ? " with seconds. " : " without seconds. ") +
                 (invertDisplay ? "Inverted display. " : "") +
@@ -269,5 +336,8 @@ namespace StatusDockPreview
 
         [DataMember(Name = "invertDisplay")]
         public bool? InvertDisplay;
+
+        [DataMember(Name = "pcStatsLayout", EmitDefaultValue = false)]
+        public int PcStatsLayout;
     }
 }
