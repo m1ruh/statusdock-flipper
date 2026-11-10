@@ -4,16 +4,16 @@
 
 1. Connect the Flipper over USB and return to its home screen. Close qFlipper and Flipper Lab to release the serial port.
 2. Open **Windows → StatusDock.cmd** and choose **1** to start. The Windows sender opens StatusDock on the Flipper and sends the current time and measurements.
-3. Choose **2** to start the sender at Windows sign-in. If you move the StatusDock folder, run option **2** again from the new location.
+3. Choose **2** to install the **StatusDock** task in Windows Task Scheduler. It starts the sender when you sign in. If you move the StatusDock folder, run option **2** again from the new location.
 4. Open **Windows → StatusDock Settings.exe**. Select **PC Stats** or **Large Clock**, and use **Show seconds** to control the clock. The Flipper applies the change on the next normal update.
 
 StatusDock saves your choices in `Windows/StatusDock Settings.json`.
 
 While live data is showing, briefly press **OK** on the Flipper to switch between **PC Stats** and **Large Clock**. The Windows sender saves that view even when Settings is closed. Changing the view in **StatusDock Settings** also updates the Flipper.
 
-At your next Windows sign-in, connect the Flipper and open **StatusDock Settings**. Check that the Flipper shows your saved display, the preview says **Live**, and the clock or measurements update without starting the sender manually.
+To check the task now, stop the sender with option **3**, return the connected Flipper to its home screen, then select **Run** for **StatusDock** in Task Scheduler. The sender opens StatusDock on the Flipper and the Settings preview shows **Live**. The same task runs at your next Windows sign-in.
 
-Press **Back** on the Flipper to leave the display. Open **StatusDock** from **Apps → Tools** to resume. Choose **3** in the Windows launcher to stop the sender, or **4** to remove automatic startup.
+Press **Back** on the Flipper to leave the display. Open **StatusDock** from **Apps → Tools** to resume. Choose **3** in the Windows launcher to stop the sender. Choose **4** to remove the sign-in task.
 
 ## Use qFlipper alongside StatusDock
 

@@ -17,19 +17,25 @@ $liveTempPath = "$liveSamplePath.tmp"
 if ($InstallStartup -or $RemoveStartup) {
     $startup = [Environment]::GetFolderPath('Startup')
     $shortcutPath = Join-Path $startup 'StatusDock.lnk'
+    $taskName = 'StatusDock'
     if ($InstallStartup) {
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $shortcut.Arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'
-        if ($Port) { $shortcut.Arguments += ' -Port ' + $Port }
-        $shortcut.WorkingDirectory = $PSScriptRoot
-        $shortcut.Save()
+        $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $windowsPS = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'
+        if ($Port) { $arguments += ' -Port ' + $Port }
+        $action = New-ScheduledTaskAction -Execute $windowsPS -Argument $arguments -WorkingDirectory $PSScriptRoot
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+        $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+            -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+        Register-ScheduledTask -TaskName $taskName -TaskPath '\' -Action $action -Trigger $trigger `
+            -Principal $principal -Settings $settings -Force | Out-Null
+        if (Test-Path -LiteralPath $shortcutPath) { Remove-Item -LiteralPath $shortcutPath }
         Write-Host 'StatusDock will start automatically at your next Windows sign-in.'
-    } elseif (Test-Path -LiteralPath $shortcutPath) {
-        Remove-Item -LiteralPath $shortcutPath
-        Write-Host 'The startup entry was removed.'
     } else {
+        $task = Get-ScheduledTask -TaskName $taskName -TaskPath '\' -ErrorAction SilentlyContinue
+        if ($task) { Unregister-ScheduledTask -TaskName $taskName -TaskPath '\' -Confirm:$false }
+        if (Test-Path -LiteralPath $shortcutPath) { Remove-Item -LiteralPath $shortcutPath }
         Write-Host 'Automatic startup is disabled.'
     }
     return
