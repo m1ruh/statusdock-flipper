@@ -15,13 +15,13 @@ Git tracks the source and documentation. Preferences, live snapshots, logs, roll
 
 Open **Windows → StatusDock Settings.exe** and choose **PC Stats** or **Large Clock**. Use **Show seconds** to control the clock. The 128 × 64 pixel preview reflects your choices, and the sender rereads them on each update. The window and sender share `Windows/StatusDock Settings.json`. If the sender cannot read valid preferences, it uses **PC Stats** with seconds.
 
-The preview says **Live** after the Flipper accepts fresh measurements. The clock keeps ticking between samples. If the feed stops, the preview says **No live data** and shows labeled sample data until the feed resumes.
+Resize or maximize Settings to put the preview beside the controls. At narrower widths, the preview sits above them. The preview says **Live** after the Flipper accepts fresh measurements. The clock keeps ticking between samples. If the feed stops, the preview says **No live data** and shows labeled sample data until the feed resumes.
 
 In **PC Stats**, use **Layout** to align the clock, move the CPU, RAM, and GPU rows, or choose **Numbers only** for larger percentages. Temperatures stay visible when available. Changes appear immediately in the preview and on the next live update on the Flipper. **Reset layout** restores the centered clock, CPU/RAM/GPU order, and **Bars + numbers**.
 
 **Windows theme** switches the settings window between **Dark** and **Light**. Dark is the default. The choice is saved alongside the display settings.
 
-**Invert Flipper display** reverses the preview and the live Flipper display in either view. It is off by default and takes effect on the Flipper with the next live update.
+**Invert Flipper display colours** reverses the colours. **Flip Flipper display** rotates the image 180°. Each option defaults to off and can be used independently in either view. Both are reflected immediately in the preview and applied on the Flipper with the next live update.
 
 See [Getting Started](Getting%20Started.md) for installation and sign-in checks.
 

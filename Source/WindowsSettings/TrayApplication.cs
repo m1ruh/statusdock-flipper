@@ -91,11 +91,10 @@ namespace StatusDockPreview
         {
             using (var bitmap = new Bitmap(16, 16))
             using (var graphics = Graphics.FromImage(bitmap))
+            using (var gauge = Icon.ExtractAssociatedIcon(Forms.Application.ExecutablePath))
             using (var indicator = new SolidBrush(color))
             {
-                graphics.FillRectangle(Brushes.MidnightBlue, 1, 2, 14, 12);
-                graphics.FillRectangle(Brushes.White, 4, 7, 2, 4);
-                graphics.FillRectangle(Brushes.White, 7, 5, 2, 6);
+                graphics.DrawIcon(gauge, new Rectangle(0, 0, 16, 16));
                 graphics.FillEllipse(indicator, 9, 8, 7, 7);
                 IntPtr handle = bitmap.GetHicon();
                 try { return (Icon)Icon.FromHandle(handle).Clone(); }

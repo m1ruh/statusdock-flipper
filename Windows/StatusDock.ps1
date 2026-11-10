@@ -204,6 +204,7 @@ function New-DeskSample([DateTime]$Time, [int]$Cpu, [int]$Ram, [int]$Gpu, [int]$
         $layout -lt 0 -or $layout -gt 63 -or ($layout -band 3) -gt 2 -or (($layout -shr 2) -band 7) -gt 5) {
         $layout = 0
     }
+    if ($settings.flipDisplay -is [bool] -and $settings.flipDisplay) { $layout = $layout -bor 64 }
     $clockQuarters = [int][Math]::Floor($Time.TimeOfDay.TotalMilliseconds / 250)
     $prefix = 0x54000000
     if ($settings.display -eq 'clock' -or -not $settings.showSeconds -or $invert) {
@@ -214,10 +215,11 @@ function New-DeskSample([DateTime]$Time, [int]$Cpu, [int]$Ram, [int]$Gpu, [int]$
         if (-not $settings.showSeconds) { $prefix = $prefix -bor 0x04000000 }
     }
     $signal = $prefix -bor ($Gpu -shl 19) -bor $clockQuarters
-    # Formatting the four bytes separately avoids signed integer conversion on Windows PowerShell 5.1.
+    # Format bytes separately for Windows PowerShell 5.1 and mark the argument as hex.
+    # Without 0x, Momentum strips a leading 0B when CPU is 11%.
     return @{
-        command = 'loader signal {0} {1:X2}{2:X2}{3:X2}{4:X2}' -f $signal, $Cpu, $Ram, $CpuTemp, $GpuTemp
-        layoutCommand = 'loader signal {0} {1:X}' -f 0x53544404, $layout
+        command = 'loader signal {0} 0x{1:X2}{2:X2}{3:X2}{4:X2}' -f $signal, $Cpu, $Ram, $CpuTemp, $GpuTemp
+        layoutCommand = 'loader signal {0} 0x{1:X}' -f 0x53544404, $layout
         sampledAtUtcMs = ([DateTimeOffset]$Time).ToUnixTimeMilliseconds()
         clockQuarters = $clockQuarters
         cpu = $Cpu
@@ -414,7 +416,7 @@ try {
             $cpu, $ram = [StatusDockMetrics]::Read()
             Sync-FlipperView $serial
             $sample = New-DeskSample (Get-Date) $cpu $ram $gpu $cpuTemp $gpuTemp
-            # Send the PC Stats layout before the sample. Older apps still accept the sample.
+            # Send the display layout before the sample. Older apps still accept the sample.
             $null = Invoke-FlipperCommand $serial $sample.layoutCommand
             $reply = Invoke-FlipperCommand $serial $sample.command
             if ($reply -match 'was handled') {

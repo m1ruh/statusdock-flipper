@@ -21,7 +21,10 @@
 #define VIEW_STATS_SIGNAL 0x53544401U
 #define VIEW_CLOCK_SIGNAL 0x53544402U
 #define VIEW_SAVED_SIGNAL 0x53544403U
-#define STATS_LAYOUT_SIGNAL 0x53544404U
+#define DISPLAY_LAYOUT_SIGNAL 0x53544404U
+#define DISPLAY_WIDTH 128
+#define DISPLAY_HEIGHT 64
+#define NUMBER_HEIGHT 10
 #define SECONDS_PER_DAY 86400U
 #define QUARTERS_PER_SECOND 4U
 #define GPU_UNKNOWN 127U
@@ -57,7 +60,13 @@ typedef struct {
     DeskClockAlignment alignment;
     uint8_t order;
     bool numbers_only;
+    bool flip;
 } DeskLayout;
+
+typedef struct {
+    Canvas* canvas;
+    bool flip;
+} DeskDisplay;
 
 // Match StatsLayout.cs. Index zero preserves the original metric order.
 static const DeskMetric desk_orders[][3] = {
@@ -136,6 +145,19 @@ static const uint8_t desk_glyphs[][7] = {
     {17, 17, 17, 17, 17, 17, 14},
 };
 
+// Two pixels for each horizontal stroke and balanced spacing on either side.
+static const uint8_t desk_number_rows[] = {0, 2, 3, 4, 6, 7, 8, NUMBER_HEIGHT};
+
+static void desk_rectangle(
+    const DeskDisplay* display, int x, int y, int width, int height, bool filled) {
+    if(display->flip) {
+        x = DISPLAY_WIDTH - x - width;
+        y = DISPLAY_HEIGHT - y - height;
+    }
+    if(filled) canvas_draw_box(display->canvas, x, y, width, height);
+    else canvas_draw_frame(display->canvas, x, y, width, height);
+}
+
 static int desk_glyph_width(char character) {
     return character == ':' || character == ' ' ? 3 : 5;
 }
@@ -148,7 +170,7 @@ static int desk_text_width(const char* text, int scale_x) {
 }
 
 static void desk_draw_text(
-    Canvas* canvas, const char* text, int x, int y, int scale_x, int height) {
+    const DeskDisplay* display, const char* text, int x, int y, int scale_x, int height) {
     for(; *text; ++text) {
         const char* character = strchr(desk_glyph_chars, *text);
         int width = desk_glyph_width(*text);
@@ -158,12 +180,12 @@ static void desk_draw_text(
         }
         const uint8_t* glyph = desk_glyphs[character - desk_glyph_chars];
         for(int row = 0; row < 7; ++row) {
-            int top = row * height / 7;
-            int row_height = (row + 1) * height / 7 - top;
+            int top = height == NUMBER_HEIGHT ? desk_number_rows[row] : row * height / 7;
+            int bottom = height == NUMBER_HEIGHT ? desk_number_rows[row + 1] : (row + 1) * height / 7;
             for(int column = 0; column < width; ++column) {
                 if(glyph[row] & (1U << (width - 1 - column))) {
-                    canvas_draw_box(
-                        canvas, x + column * scale_x, y + top, scale_x, row_height);
+                    desk_rectangle(
+                        display, x + column * scale_x, y + top, scale_x, bottom - top, true);
                 }
             }
         }
@@ -172,7 +194,7 @@ static void desk_draw_text(
 }
 
 static void desk_draw_clock_group(
-    Canvas* canvas,
+    const DeskDisplay* display,
     const char* clock,
     const char* seconds,
     int clock_scale_x,
@@ -184,13 +206,13 @@ static void desk_draw_clock_group(
     DeskClockAlignment alignment) {
     int clock_width = desk_text_width(clock, clock_scale_x);
     int width = clock_width + (*seconds ? gap + desk_text_width(seconds, seconds_scale_x) : 0);
-    int left = (128 - width) / 2;
+    int left = (DISPLAY_WIDTH - width) / 2;
     if(alignment == DeskAlignLeft) left = 3;
-    if(alignment == DeskAlignRight) left = 128 - width - 3;
+    if(alignment == DeskAlignRight) left = DISPLAY_WIDTH - width - 3;
     desk_draw_text(
-        canvas, clock, left, bottom - clock_height, clock_scale_x, clock_height);
+        display, clock, left, bottom - clock_height, clock_scale_x, clock_height);
     desk_draw_text(
-        canvas,
+        display,
         seconds,
         left + clock_width + gap,
         bottom - seconds_height,
@@ -199,32 +221,32 @@ static void desk_draw_clock_group(
 }
 
 static void desk_meter(
-    Canvas* canvas,
+    const DeskDisplay* display,
     uint8_t baseline,
     const char* label,
     uint8_t percent,
     uint8_t temp,
     bool numbers_only) {
     char text[10];
-    desk_draw_text(canvas, label, 2, baseline - 7, 1, 7);
+    desk_draw_text(display, label, 2, baseline - 7, 1, 7);
     if(percent <= 100) {
         snprintf(text, sizeof(text), "%u%%", (unsigned)percent);
     } else {
         snprintf(text, sizeof(text), "--");
     }
     if(!numbers_only) {
-        canvas_draw_frame(canvas, 26, baseline - 7, 43, 7);
+        desk_rectangle(display, 26, baseline - 7, 43, 7, false);
         if(percent <= 100) {
             uint8_t width = (41U * percent + 50U) / 100U;
-            if(width) canvas_draw_box(canvas, 27, baseline - 6, width, 5);
+            if(width) desk_rectangle(display, 27, baseline - 6, width, 5, true);
         }
     }
     int scale = numbers_only ? 2 : 1;
-    int height = numbers_only ? 11 : 7;
-    desk_draw_text(canvas, text, 95 - desk_text_width(text, scale), baseline - height, scale, height);
+    int height = numbers_only ? NUMBER_HEIGHT : 7;
+    desk_draw_text(display, text, 95 - desk_text_width(text, scale), baseline - height, scale, height);
     if(temp != METRIC_UNKNOWN) {
         snprintf(text, sizeof(text), "%u C", (unsigned)temp);
-        desk_draw_text(canvas, text, 126 - desk_text_width(text, 1), baseline - 7, 1, 7);
+        desk_draw_text(display, text, 126 - desk_text_width(text, 1), baseline - 7, 1, 7);
     }
 }
 
@@ -251,11 +273,12 @@ static void desk_draw(Canvas* canvas, void* context) {
     Color foreground = ColorBlack;
     Color background = ColorWhite;
     if(sample.invert_display) {
-        canvas_draw_box(canvas, 0, 0, 128, 64);
+        canvas_draw_box(canvas, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
         foreground = ColorWhite;
         background = ColorBlack;
     }
     canvas_set_color(canvas, foreground);
+    const DeskDisplay display = {.canvas = canvas, .flip = layout.flip};
 
     char clock[6];
     snprintf(
@@ -271,16 +294,16 @@ static void desk_draw(Canvas* canvas, void* context) {
     if(sample.large_clock) {
         if(sample.show_seconds) {
             // A 21-pixel clock and 16-pixel seconds share a centered baseline.
-            desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 16, 6, 42, DeskAlignCenter);
+            desk_draw_clock_group(&display, clock, seconds, 3, 21, 2, 16, 6, 42, DeskAlignCenter);
         } else {
-            desk_draw_clock_group(canvas, clock, seconds, 4, 28, 1, 7, 4, 46, DeskAlignCenter);
+            desk_draw_clock_group(&display, clock, seconds, 4, 28, 1, 7, 4, 46, DeskAlignCenter);
         }
         return;
     }
 
-    canvas_draw_box(canvas, 0, 0, 128, 23);
+    desk_rectangle(&display, 0, 0, DISPLAY_WIDTH, 23, true);
     canvas_set_color(canvas, background);
-    desk_draw_clock_group(canvas, clock, seconds, 3, 21, 2, 14, 6, 22, layout.alignment);
+    desk_draw_clock_group(&display, clock, seconds, 3, 21, 2, 14, 6, 22, layout.alignment);
 
     canvas_set_color(canvas, foreground);
     const char* labels[] = {"CPU", "RAM", "GPU"};
@@ -289,7 +312,7 @@ static void desk_draw(Canvas* canvas, void* context) {
     for(uint8_t row = 0; row < 3; ++row) {
         DeskMetric metric = desk_orders[layout.order][row];
         desk_meter(
-            canvas, 35 + row * 13, labels[metric], percents[metric], temperatures[metric],
+            &display, 35 + row * 13, labels[metric], percents[metric], temperatures[metric],
             layout.numbers_only);
     }
 }
@@ -323,15 +346,20 @@ static bool desk_signal(uint32_t signal, void* arg, void* context) {
     } else if(signal == VIEW_SAVED_SIGNAL && (uintptr_t)arg <= 1U) {
         event.kind = DeskEventViewSaved;
         event.saved_view = arg ? DeskViewClock : DeskViewStats;
-    } else if(signal == STATS_LAYOUT_SIGNAL) {
-        // Two alignment bits, three order bits, then the Numbers only flag.
+    } else if(signal == DISPLAY_LAYOUT_SIGNAL) {
+        // Two alignment bits, three order bits, then the Numbers only and flip flags.
         uint32_t packed = (uintptr_t)arg;
         uint32_t alignment = packed & 3U;
         uint32_t order = (packed >> 2) & 7U;
-        if(packed > 63U || alignment > DeskAlignRight || order >= COUNT_OF(desk_orders))
+        if(packed > 127U || alignment > DeskAlignRight || order >= COUNT_OF(desk_orders))
             return false;
         event.kind = DeskEventLayout;
-        event.layout = (DeskLayout){alignment, order, (packed & 32U) != 0};
+        event.layout = (DeskLayout){
+            .alignment = alignment,
+            .order = order,
+            .numbers_only = (packed & 32U) != 0,
+            .flip = (packed & 64U) != 0,
+        };
     } else if(quarter_clock || (signal & SAMPLE_V1_MASK) == SAMPLE_V1_PREFIX) {
         uint32_t packed = (uintptr_t)arg;
         event.sample = (DeskSample){

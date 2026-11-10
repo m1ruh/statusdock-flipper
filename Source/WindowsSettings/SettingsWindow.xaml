@@ -1,8 +1,8 @@
 <Window x:Class="StatusDockPreview.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="StatusDock Settings" Width="590" SizeToContent="Height"
-        ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
+        Title="StatusDock Settings" Icon="StatusDock.ico" Width="1000" Height="810"
+        MinWidth="410" MinHeight="330" ResizeMode="CanResize" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBackground}" Foreground="{DynamicResource MainText}"
         FontFamily="Segoe UI" FontSize="14"
         UseLayoutRounding="True" xml:lang="en">
@@ -23,6 +23,7 @@
                 <SolidColorBrush x:Key="Badge" Color="#38312A" />
                 <SolidColorBrush x:Key="LiveBadge" Color="#254637" />
                 <SolidColorBrush x:Key="ScreenFrame" Color="#100F0E" />
+                <SolidColorBrush x:Key="ScrollThumb" Color="#82766C" />
             </ResourceDictionary>
             <ResourceDictionary x:Key="LightTheme">
                 <SolidColorBrush x:Key="WindowBackground" Color="#F5F3EF" />
@@ -39,6 +40,7 @@
                 <SolidColorBrush x:Key="Badge" Color="#E9E3D8" />
                 <SolidColorBrush x:Key="LiveBadge" Color="#D1E9D9" />
                 <SolidColorBrush x:Key="ScreenFrame" Color="#2B2824" />
+                <SolidColorBrush x:Key="ScrollThumb" Color="#9B8E80" />
             </ResourceDictionary>
             <Style x:Key="SectionLabel" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="11" />
@@ -139,15 +141,9 @@
             </Style>
         </ResourceDictionary>
     </Window.Resources>
-    <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Margin="22,19,22,0">
-            <DockPanel LastChildFill="False">
-                <StackPanel DockPanel.Dock="Left">
-                    <TextBlock Text="StatusDock Settings" FontWeight="SemiBold" FontSize="29" />
-                    <TextBlock Text="Flipper display and Windows appearance" Foreground="{DynamicResource MutedText}"
-                               Margin="0,2,0,0" />
-                </StackPanel>
-                <Border DockPanel.Dock="Right" VerticalAlignment="Top" Margin="0,6,0,0"
+    <DockPanel MaxWidth="1140" Margin="22,19,22,16">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,21">
+                <Border DockPanel.Dock="Right" VerticalAlignment="Top" Margin="8,6,0,0"
                         Padding="9,4" CornerRadius="9">
                     <Border.Style>
                         <Style TargetType="Border">
@@ -161,8 +157,23 @@
                     </Border.Style>
                     <TextBlock x:Name="DataLabel" Text="Sample data" Style="{StaticResource SectionLabel}" />
                 </Border>
-            </DockPanel>
-            <DockPanel Margin="0,21,0,7">
+            <StackPanel>
+                <TextBlock Text="StatusDock Settings" FontWeight="SemiBold" FontSize="29" TextWrapping="Wrap" />
+                <TextBlock Text="Flipper display and Windows appearance" Foreground="{DynamicResource MutedText}"
+                           Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </DockPanel>
+        <Grid SizeChanged="OnLayoutSizeChanged">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="ControlsColumn" Width="0" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="PreviewRow" Height="Auto" />
+                <RowDefinition x:Name="ControlsRow" Height="*" />
+            </Grid.RowDefinitions>
+          <StackPanel x:Name="PreviewPane" VerticalAlignment="Top" Margin="0,0,0,17">
+            <DockPanel Margin="0,0,0,7">
                 <TextBlock DockPanel.Dock="Right" Text="128 × 64 px" Style="{StaticResource SectionLabel}" />
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="PREVIEW" Style="{StaticResource SectionLabel}" />
@@ -170,15 +181,70 @@
                                Foreground="{DynamicResource Accent}" Style="{StaticResource SectionLabel}" />
                 </StackPanel>
             </DockPanel>
-            <Border Background="{DynamicResource ScreenFrame}" CornerRadius="12" Padding="12">
-                <Image x:Name="PreviewImage" MaxWidth="512" MaxHeight="256" Stretch="Uniform"
+            <Border Background="{DynamicResource ScreenFrame}" CornerRadius="12" Padding="12" HorizontalAlignment="Left">
+                <Image x:Name="PreviewImage" Width="128" Height="64" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="NearestNeighbor"
                        AutomationProperties.Name="Flipper display preview" />
             </Border>
-        </StackPanel>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="22,0,22,16">
-            <TextBlock Text="DISPLAY" Margin="0,19,0,7" Style="{StaticResource SectionLabel}" />
+          </StackPanel>
+          <ScrollViewer x:Name="ControlsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+            <ScrollViewer.Resources>
+                <Style x:Key="SlimScrollBar" TargetType="ScrollBar">
+                    <Setter Property="Width" Value="10" />
+                    <Setter Property="MinWidth" Value="0" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False" />
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border x:Name="Grip" Background="{DynamicResource ScrollThumb}"
+                                                            CornerRadius="3" Margin="3,1,1,1" />
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Grip" Property="Background" Value="{DynamicResource Accent}" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False" />
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ScrollViewer.Resources>
+            <ScrollViewer.Template>
+                <ControlTemplate TargetType="ScrollViewer">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                Content="{TemplateBinding Content}"
+                                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                CanContentScroll="{TemplateBinding CanContentScroll}" />
+                        <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Orientation="Vertical"
+                                   Style="{StaticResource SlimScrollBar}" Maximum="{TemplateBinding ScrollableHeight}"
+                                   ViewportSize="{TemplateBinding ViewportHeight}"
+                                   Value="{TemplateBinding VerticalOffset}"
+                                   Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+                    </Grid>
+                </ControlTemplate>
+            </ScrollViewer.Template>
+          <StackPanel>
+            <TextBlock Text="DISPLAY" Margin="0,0,0,7" Style="{StaticResource SectionLabel}" />
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -195,13 +261,15 @@
                 <StackPanel>
                     <CheckBox x:Name="SecondsChoice" Content="Show seconds" Style="{StaticResource SettingsCheck}"
                               Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
-                    <CheckBox x:Name="InvertChoice" Content="Invert Flipper display" Margin="0,10,0,0"
+                    <CheckBox x:Name="InvertChoice" Content="Invert Flipper display colours" Margin="0,10,0,0"
+                              Style="{StaticResource SettingsCheck}" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
+                    <CheckBox x:Name="FlipChoice" Content="Flip Flipper display" Margin="0,10,0,0"
                               Style="{StaticResource SettingsCheck}" Checked="OnChoiceChanged" Unchecked="OnChoiceChanged" />
                 </StackPanel>
             </Border>
             <StackPanel x:Name="LayoutSection">
                 <DockPanel Margin="0,19,0,7">
-                    <Button DockPanel.Dock="Right" Content="Reset layout" Style="{StaticResource LayoutButton}"
+                    <Button x:Name="ResetLayoutButton" DockPanel.Dock="Right" Content="Reset layout" Style="{StaticResource LayoutButton}"
                             Click="OnResetLayout" />
                     <TextBlock Text="LAYOUT" VerticalAlignment="Center" Style="{StaticResource SectionLabel}" />
                 </DockPanel>
@@ -264,6 +332,7 @@
             <TextBlock x:Name="SaveStatus" Margin="0,12,0,0" Foreground="{DynamicResource MutedText}" FontSize="12"
                        Text="Settings are saved automatically in this folder." TextWrapping="Wrap" />
           </StackPanel>
-        </ScrollViewer>
+          </ScrollViewer>
+        </Grid>
     </DockPanel>
 </Window>

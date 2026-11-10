@@ -20,6 +20,9 @@ namespace StatusDockPreview
     {
         private const int DwmCaptionColor = 35;
         private const int DwmTextColor = 36;
+        private const double SideBySideWidth = 816;
+        private const double ColumnGap = 24;
+        private const double PreviewPadding = 24;
 
         private static readonly LiveSample Example = new LiveSample
         {
@@ -57,14 +60,15 @@ namespace StatusDockPreview
         public SettingsWindow()
         {
             InitializeComponent();
-            MaxHeight = SystemParameters.WorkArea.Height;
-            MaxWidth = SystemParameters.WorkArea.Width;
+            Height = Math.Min(Height, SystemParameters.WorkArea.Height);
+            Width = Math.Min(Width, SystemParameters.WorkArea.Width);
 
             var settings = LoadSettings(true) ?? new PreviewSettings();
             ClockChoice.IsChecked = settings.Display == "clock";
             StatsChoice.IsChecked = !ClockChoice.IsChecked;
             SecondsChoice.IsChecked = settings.ShowSeconds ?? true;
             InvertChoice.IsChecked = settings.InvertDisplay ?? false;
+            FlipChoice.IsChecked = settings.FlipDisplay;
             LightThemeChoice.IsChecked = settings.Theme == "light";
             DarkThemeChoice.IsChecked = !LightThemeChoice.IsChecked;
             layout = new StatsLayout(settings.PcStatsLayout);
@@ -87,9 +91,30 @@ namespace StatusDockPreview
                 SaveCurrentSettings(settings => settings.ShowSeconds = SecondsChoice.IsChecked == true);
             else if (sender == InvertChoice)
                 SaveCurrentSettings(settings => settings.InvertDisplay = InvertChoice.IsChecked == true);
+            else if (sender == FlipChoice)
+                SaveCurrentSettings(settings => settings.FlipDisplay = FlipChoice.IsChecked == true);
             else
                 SaveCurrentSettings(settings => settings.Display = sender == ClockChoice ? "clock" : "stats");
             RefreshPreview(true);
+        }
+
+        private void OnLayoutSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            var size = e.NewSize;
+            bool sideBySide = size.Width >= SideBySideWidth;
+            ControlsColumn.Width = sideBySide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            PreviewRow.Height = sideBySide ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            ControlsRow.Height = sideBySide ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            Grid.SetColumn(ControlsScroll, sideBySide ? 1 : 0);
+            Grid.SetRow(ControlsScroll, sideBySide ? 0 : 1);
+            PreviewPane.Margin = sideBySide ? new Thickness(0, 0, ColumnGap, 0) : new Thickness(0, 0, 0, 17);
+
+            // On a short window, keep room below the preview for the stacked controls.
+            double availableWidth = sideBySide ? size.Width / 2 - ColumnGap : size.Width;
+            double heightLimit = sideBySide ? size.Height - 44 : (size.Height - 62) * 0.4;
+            double width = Math.Min(512, Math.Min(availableWidth - PreviewPadding, heightLimit * 2));
+            PreviewImage.Width = Math.Max(1, width);
+            PreviewImage.Height = PreviewImage.Width / 2;
         }
 
         private void OnThemeChanged(object sender, RoutedEventArgs e)
@@ -249,6 +274,7 @@ namespace StatusDockPreview
             LayoutSection.Visibility = clockOnly ? Visibility.Collapsed : Visibility.Visible;
             bool showSeconds = SecondsChoice.IsChecked == true;
             bool invertDisplay = InvertChoice.IsChecked == true;
+            bool flipDisplay = FlipChoice.IsChecked == true;
             var displayedSample = sample ?? Example;
             long elapsedMs = isLive
                 ? (showSeconds ? utcMs - sample.SampledAtUtcMs : 0)
@@ -266,11 +292,12 @@ namespace StatusDockPreview
             DataLabel.Text = isLive ? "Live" : "Sample data";
             NoLiveLabel.Visibility = isLive ? Visibility.Collapsed : Visibility.Visible;
             PreviewImage.Source = FlipperPreview.Render(
-                displayedSample, clockSeconds, clockOnly, showSeconds, invertDisplay, layout);
+                displayedSample, clockSeconds, clockOnly, showSeconds, invertDisplay, flipDisplay, layout);
             AutomationProperties.SetHelpText(PreviewImage,
                 (clockOnly ? "Large Clock" : "PC Stats") +
                 (showSeconds ? " with seconds. " : " without seconds. ") +
-                (invertDisplay ? "Inverted display. " : "") +
+                (invertDisplay ? "Inverted display colours. " : "") +
+                (flipDisplay ? "Display rotated 180 degrees. " : "") +
                 (isLive ? "Live." : "No live data. Showing sample data."));
         }
 
@@ -336,6 +363,9 @@ namespace StatusDockPreview
 
         [DataMember(Name = "invertDisplay")]
         public bool? InvertDisplay;
+
+        [DataMember(Name = "flipDisplay", EmitDefaultValue = false)]
+        public bool FlipDisplay;
 
         [DataMember(Name = "pcStatsLayout", EmitDefaultValue = false)]
         public int PcStatsLayout;

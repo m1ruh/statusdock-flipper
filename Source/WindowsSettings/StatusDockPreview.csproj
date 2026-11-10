@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>StatusDock Settings</AssemblyName>
+    <ApplicationIcon>StatusDock.ico</ApplicationIcon>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <OutputPath>..\..\Windows\</OutputPath>
     <StartupObject>StatusDockPreview.SettingsWindow</StartupObject>
@@ -20,6 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <Page Include="SettingsWindow.xaml" />
+    <Resource Include="StatusDock.ico" />
     <Compile Include="SettingsWindow.cs" />
     <Compile Include="FlipperPreview.cs" />
     <Compile Include="StatsLayout.cs" />

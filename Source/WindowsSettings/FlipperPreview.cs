@@ -12,6 +12,9 @@ namespace StatusDockPreview
         private const int Height = 64;
         private const byte Light = 0;
         private const byte Dark = 1;
+        private const int NumberHeight = 10;
+        // Match the number row offsets in statusdock.c.
+        private static readonly int[] NumberRows = { 0, 2, 3, 4, 6, 7, 8, NumberHeight };
         private static readonly BitmapPalette Palette = new BitmapPalette(new[]
         {
             Color.FromRgb(255, 174, 76),
@@ -52,7 +55,7 @@ namespace StatusDockPreview
 
         public static BitmapSource Render(
             LiveSample sample, int clockSeconds, bool clockOnly, bool showSeconds, bool invertDisplay,
-            StatsLayout layout)
+            bool flipDisplay, StatsLayout layout)
         {
             var preview = new FlipperPreview();
             var time = TimeSpan.FromSeconds(clockSeconds);
@@ -65,6 +68,7 @@ namespace StatusDockPreview
             else
                 preview.DrawStats(sample, clock, seconds, layout);
 
+            if (flipDisplay) Array.Reverse(preview.pixels);
             var bitmap = BitmapSource.Create(Width, Height, 96, 96, PixelFormats.Indexed8,
                 invertDisplay ? InvertedPalette : Palette, preview.pixels, Width);
             bitmap.Freeze();
@@ -115,7 +119,7 @@ namespace StatusDockPreview
             string value = percent <= 100 ? percent.ToString(CultureInfo.InvariantCulture) + "%" : "--";
             if (numbersOnly)
             {
-                DrawRight(value, 95, baseline - 11, Dark, 2, 11);
+                DrawRight(value, 95, baseline - NumberHeight, Dark, 2, NumberHeight);
             }
             else
             {
@@ -155,12 +159,12 @@ namespace StatusDockPreview
                 byte[] glyph = Glyphs[character];
                 for (int row = 0; row < glyph.Length; row++)
                 {
-                    int top = row * glyphHeight / glyph.Length;
-                    int rowHeight = (row + 1) * glyphHeight / glyph.Length - top;
+                    int top = glyphHeight == NumberHeight ? NumberRows[row] : row * glyphHeight / glyph.Length;
+                    int bottom = glyphHeight == NumberHeight ? NumberRows[row + 1] : (row + 1) * glyphHeight / glyph.Length;
                     for (int column = 0; column < width; column++)
                     {
                         if ((glyph[row] & (1 << (width - 1 - column))) != 0)
-                            Fill(x + column * scaleX, y + top, scaleX, rowHeight, color);
+                            Fill(x + column * scaleX, y + top, scaleX, bottom - top, color);
                     }
                 }
                 x += (width + 1) * scaleX;
