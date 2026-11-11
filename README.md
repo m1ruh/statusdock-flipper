@@ -2,6 +2,12 @@
 
 StatusDock turns a Flipper Zero into a small USB display for Windows. It shows the time, CPU and RAM usage, and NVIDIA GPU usage and temperature. It can also show CPU temperature when Libre Hardware Monitor is running and can read the sensor.
 
+## Firmware compatibility
+
+- Momentum `mntm-012` — tested on a physical Flipper Zero.
+- Official Flipper Zero firmware `1.5.1` — tested on a physical Flipper Zero.
+- Unleashed — untested.
+
 ## Project files
 
 - `Source/` contains the Flipper source and uFBT manifest.
@@ -28,7 +34,7 @@ See [Getting Started](Getting%20Started.md) for installation and sign-in checks.
 ## Build
 
 - With the .NET Framework 4.8 Developer Pack installed, run `MSBuild "Source\WindowsSettings\StatusDockPreview.csproj" /p:Configuration=Release`. The build produces `Windows/StatusDock Settings.exe`.
-- Run `ufbt` in `Source` with the Momentum mntm-012 SDK (API 87.1). The build produces `Source/dist/statusdock.fap`.
+- Run `ufbt` in `Source` with the SDK for your firmware. Use API 87.1 for Momentum `mntm-012` or API 88.2 for official firmware `1.5.1`. The build produces `Source/dist/statusdock.fap`.
 
 ## Future work
 
