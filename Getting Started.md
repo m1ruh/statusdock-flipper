@@ -27,6 +27,6 @@ If the USB port cuts power, the Flipper shuts down after about eight seconds and
 
 ## Install the Flipper app
 
-Use a build for **Momentum mntm-012**. Build `Source/dist/statusdock.fap` from source or use `Flipper/statusdock.fap` from a packaged copy. Stop the Windows sender with **3**, exit StatusDock on the Flipper, and back up the installed `statusdock.fap` if present. In qFlipper, copy the new build to **SD Card → apps → Tools** as `statusdock.fap`. Close qFlipper and start the Windows sender with **1**.
+Use the ZIP for your firmware, **Momentum mntm-012** or **official Flipper Zero firmware 1.5.1**, or build `Source/dist/statusdock.fap` with the matching SDK. Stop the Windows sender with **3**, exit StatusDock on the Flipper, and back up the installed `statusdock.fap` if present. In qFlipper, copy the packaged `Flipper/statusdock.fap` or your build to **SD Card → apps → Tools** as `statusdock.fap`. Close qFlipper and start the Windows sender with **1**.
 
 See the [README](README.md) for build instructions.
