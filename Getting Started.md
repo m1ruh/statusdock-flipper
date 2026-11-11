@@ -3,9 +3,9 @@
 ## Start and stop
 
 1. Connect the Flipper over USB and return to its home screen. Close qFlipper and Flipper Lab to release the serial port.
-2. Open **Windows → StatusDock.cmd** and choose **1** to start. The Windows sender opens StatusDock on the Flipper and sends the current time and measurements.
+2. Open **Windows → StatusDock.cmd** and choose **5** to create the **StatusDock** desktop shortcut. Open the shortcut to launch Settings and start the sender. You can also choose **1** in the launcher to start the sender directly.
 3. Choose **2** to install the **StatusDock** task in Windows Task Scheduler. It starts the sender when you sign in. If you move the StatusDock folder, run option **2** again from the new location.
-4. Open **Windows → StatusDock Settings.exe**. Select **PC Stats** or **Large Clock**, and use **Show seconds** to control the clock. The Flipper applies the change on the next normal update.
+4. In Settings, select **PC Stats** or **Large Clock** and use **Show seconds** to control the clock. The Flipper applies the change on the next normal update. If you move the extracted folder, run option **5** again to update the desktop shortcut.
 
 StatusDock saves your choices in `Windows/StatusDock Settings.json`.
 
@@ -13,7 +13,7 @@ While live data is showing, briefly press **OK** on the Flipper to switch betwee
 
 To check the task now, stop the sender with option **3**, return the connected Flipper to its home screen, then select **Run** for **StatusDock** in Task Scheduler. The sender opens StatusDock on the Flipper and the Settings preview shows **Live**. The same task runs at your next Windows sign-in.
 
-Press **Back** on the Flipper to leave the display. Open **StatusDock** from **Apps → Tools** to resume. Choose **3** in the Windows launcher to stop the sender. Choose **4** to remove the sign-in task.
+Press **Back** on the Flipper to leave the display. Open **StatusDock** from **Apps → Tools** to resume. Choose **Quit StatusDock** in the Windows tray to close Settings and stop the sender. Open the desktop shortcut again to bring the display back. Choose **3** in the launcher to stop the sender or **4** to remove the sign-in task.
 
 ## Use qFlipper alongside StatusDock
 

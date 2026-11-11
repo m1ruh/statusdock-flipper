@@ -26,6 +26,7 @@
     <Compile Include="FlipperPreview.cs" />
     <Compile Include="StatsLayout.cs" />
     <Compile Include="LiveSample.cs" />
+    <Compile Include="ConnectionStatus.cs" />
     <Compile Include="TrayApplication.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

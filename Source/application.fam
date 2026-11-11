@@ -6,5 +6,5 @@ App(
     sources=["*.c"],
     stack_size=3 * 1024,
     fap_category="Tools",
-    fap_version=(1, 2),
+    fap_version=(1, 3),
 )

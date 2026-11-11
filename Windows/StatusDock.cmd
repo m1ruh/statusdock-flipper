@@ -9,13 +9,20 @@ echo   1  Start StatusDock now
 echo   2  Start automatically at Windows sign-in
 echo   3  Stop StatusDock
 echo   4  Remove automatic startup
+echo   5  Create or update the desktop shortcut
 echo.
-choice /c 1234 /n /m "Choose 1-4: "
+choice /c 12345 /n /m "Choose 1-5: "
+if errorlevel 255 exit /b 1
+if errorlevel 5 goto shortcut
 if errorlevel 4 goto remove
 if errorlevel 3 goto stop
 if errorlevel 2 goto install
 if errorlevel 1 goto run
 exit /b
+
+:shortcut
+"%STATUSDOCK_PS%" -NoProfile -ExecutionPolicy Bypass -File "%STATUSDOCK_APP%" -InstallDesktopShortcut
+goto done
 
 :remove
 "%STATUSDOCK_PS%" -NoProfile -ExecutionPolicy Bypass -File "%STATUSDOCK_APP%" -RemoveStartup

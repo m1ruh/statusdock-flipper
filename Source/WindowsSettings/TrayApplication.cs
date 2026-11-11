@@ -10,6 +10,9 @@ namespace StatusDockPreview
 {
     internal sealed class TrayApplication : Forms.ApplicationContext
     {
+        internal const string QuitSettingsEvent = @"Local\StatusDock-QuitSettings";
+        internal const string StopSenderEvent = @"Local\StatusDock-Stop";
+
         private readonly Process sender;
         private readonly EventWaitHandle pauseRequested;
         private readonly EventWaitHandle paused;
@@ -31,14 +34,17 @@ namespace StatusDockPreview
                 using (var sender = Process.GetProcessById(senderId))
                 using (var request = EventWaitHandle.OpenExisting(@"Local\StatusDock-Pause-" + senderId))
                 using (var paused = EventWaitHandle.OpenExisting(@"Local\StatusDock-Paused-" + senderId))
-                using (var context = new TrayApplication(sender, request, paused))
+                using (var stop = EventWaitHandle.OpenExisting(StopSenderEvent))
+                using (var quit = new EventWaitHandle(false, EventResetMode.ManualReset, QuitSettingsEvent))
+                using (var context = new TrayApplication(sender, request, paused, stop, quit))
                     Forms.Application.Run(context);
             }
             catch (ArgumentException) { } // The sender exited before the tray started.
             catch (WaitHandleCannotBeOpenedException) { }
         }
 
-        private TrayApplication(Process sender, EventWaitHandle pauseRequested, EventWaitHandle paused)
+        private TrayApplication(Process sender, EventWaitHandle pauseRequested, EventWaitHandle paused,
+            EventWaitHandle stopRequested, EventWaitHandle quitSettings)
         {
             this.sender = sender;
             this.pauseRequested = pauseRequested;
@@ -54,6 +60,13 @@ namespace StatusDockPreview
                 else pauseRequested.Set();
                 RefreshStatus();
             };
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add("Quit StatusDock", null, (s, e) =>
+            {
+                menu.Enabled = false;
+                quitSettings.Set();
+                stopRequested.Set();
+            });
             tray.ContextMenuStrip = menu;
             tray.DoubleClick += (s, e) => OpenSettings();
             timer.Tick += (s, e) =>

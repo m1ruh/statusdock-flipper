@@ -12,6 +12,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Navigation;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml;
@@ -39,8 +40,12 @@ namespace StatusDockPreview
             AppDomain.CurrentDomain.BaseDirectory, "StatusDock Settings.json");
         private readonly string liveSamplePath = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, LiveSample.FileName);
+        private readonly string connectionPath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, ConnectionStatus.FileName);
         private readonly Stopwatch exampleClock = Stopwatch.StartNew();
         private readonly DispatcherTimer previewTimer = new DispatcherTimer();
+        private readonly EventWaitHandle quitRequested =
+            new EventWaitHandle(false, EventResetMode.ManualReset, TrayApplication.QuitSettingsEvent);
         private long? drawnSampleUtcMs;
         private int drawnClockSeconds = -1;
         private bool ready;
@@ -58,7 +63,30 @@ namespace StatusDockPreview
                     TrayApplication.Run(senderId);
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--open-and-start")
+                EnsureSenderStarted();
             return new Application().Run(new SettingsWindow());
+        }
+
+        private static void EnsureSenderStarted()
+        {
+            EventWaitHandle stop;
+            if (EventWaitHandle.TryOpenExisting(TrayApplication.StopSenderEvent, out stop))
+            {
+                using (stop)
+                    if (!stop.WaitOne(0)) return;
+            }
+
+            try
+            {
+                using (Process.Start(new ProcessStartInfo(
+                    typeof(SettingsWindow).Assembly.Location, "--start-sender")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                })) { }
+            }
+            catch (Win32Exception) { } // Settings still works when the sender cannot start.
         }
 
         private static int StartSender(string[] args)
@@ -117,8 +145,16 @@ namespace StatusDockPreview
             ready = true;
 
             previewTimer.Interval = TimeSpan.FromMilliseconds(250);
-            previewTimer.Tick += (sender, e) => RefreshPreview(RefreshSavedView());
-            Closed += (sender, e) => previewTimer.Stop();
+            previewTimer.Tick += (sender, e) =>
+            {
+                if (quitRequested.WaitOne(0)) Close();
+                else RefreshPreview(RefreshSavedView());
+            };
+            Closed += (sender, e) =>
+            {
+                previewTimer.Stop();
+                quitRequested.Dispose();
+            };
             previewTimer.Start();
         }
 
@@ -308,6 +344,7 @@ namespace StatusDockPreview
             if (sample != null && !sample.IsFreshAt(utcMs)) sample = null;
 
             bool isLive = sample != null;
+            RefreshConnection(isLive);
             bool clockOnly = ClockChoice.IsChecked == true;
             LayoutSection.Visibility = clockOnly ? Visibility.Collapsed : Visibility.Visible;
             bool showSeconds = SecondsChoice.IsChecked == true;
@@ -337,6 +374,55 @@ namespace StatusDockPreview
                 (invertDisplay ? "Inverted display colours. " : "") +
                 (flipDisplay ? "Display rotated 180 degrees. " : "") +
                 (isLive ? "Live." : "No live data. Showing sample data."));
+        }
+
+        private void RefreshConnection(bool isLive)
+        {
+            var connection = SnapshotFile.Read<ConnectionStatus>(connectionPath);
+            var firmware = connection == null ? null : connection.Firmware;
+            string firmwareName = firmware == null ? "" : firmware.DisplayName;
+            FirmwareText.Text = string.IsNullOrEmpty(firmwareName)
+                ? "Firmware version unavailable"
+                : firmwareName + (string.IsNullOrEmpty(firmware.Api) ? "" : " (API " + firmware.Api + ")");
+            ConnectionText.Text = connection == null
+                ? (isLive ? "Live readings received." : "Waiting for the Windows sender.")
+                : (connection.State == "Live" && !isLive ? "Waiting for fresh readings." : connection.Message);
+
+            var issue = connection == null ? null : connection.Issue;
+            bool mismatch = issue != null && issue.Kind == "ApiMismatch";
+            string download = firmware == null ? null : firmware.DownloadUrl;
+            bool untested = firmware != null && !string.IsNullOrWhiteSpace(firmware.Version) && download == null;
+            string issueMessage = null;
+            if (mismatch)
+                issueMessage = "Wrong StatusDock build" +
+                    (string.IsNullOrEmpty(firmwareName) ? "" : " for " + firmwareName) + " (API mismatch).";
+            else if (issue != null && issue.Kind == "MissingApp")
+                issueMessage = "StatusDock app missing. Copy statusdock.fap to SD Card → apps → Tools.";
+            else if (issue != null && issue.Kind == "AppBusy")
+                issueMessage = "The Flipper is busy opening or running another app.";
+            else if (issue != null)
+                issueMessage = "Could not open StatusDock on the Flipper.";
+            else if (untested)
+                issueMessage = "StatusDock compatibility is untested for this firmware.";
+            IssueText.Text = issueMessage;
+            IssueText.Visibility = issueMessage == null ? Visibility.Collapsed : Visibility.Visible;
+            IssueDetail.Text = issue == null ? null : issue.Detail;
+            IssueDetail.Visibility = string.IsNullOrEmpty(IssueDetail.Text) ? Visibility.Collapsed : Visibility.Visible;
+
+            string url = mismatch || untested ? download ?? FirmwareInfo.ReleaseNotes : null;
+            ConnectionLink.NavigateUri = url == null ? null : new Uri(url);
+            ConnectionLinkText.Text = download != null && mismatch ? "Download the matching StatusDock 1.2 ZIP" : "Read the StatusDock 1.2 release notes";
+            ConnectionLinkRow.Visibility = url == null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void OnConnectionLink(object sender, RequestNavigateEventArgs e)
+        {
+            try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+            catch (Win32Exception)
+            {
+                ConnectionLinkText.Text = e.Uri.AbsoluteUri;
+            }
+            e.Handled = true;
         }
 
         private PreviewSettings LoadSettings(bool reportError = false)

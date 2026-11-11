@@ -42,21 +42,8 @@ namespace StatusDockPreview
 
         public static LiveSample Read(string path)
         {
-            try
-            {
-                // The sender can replace or remove the snapshot while this handle is open.
-                using (var file = File.Open(path, FileMode.Open, FileAccess.Read,
-                    FileShare.ReadWrite | FileShare.Delete))
-                {
-                    var sample = (LiveSample)new DataContractJsonSerializer(typeof(LiveSample))
-                        .ReadObject(file);
-                    return sample != null && sample.IsValid() ? sample : null;
-                }
-            }
-            catch (IOException) { return null; }
-            catch (System.UnauthorizedAccessException) { return null; }
-            catch (SerializationException) { return null; }
-            catch (XmlException) { return null; }
+            var sample = SnapshotFile.Read<LiveSample>(path);
+            return sample != null && sample.IsValid() ? sample : null;
         }
 
         private bool IsValid()
@@ -72,6 +59,24 @@ namespace StatusDockPreview
         private static bool IsPercent(int value)
         {
             return value >= 0 && value <= 100;
+        }
+    }
+
+    internal static class SnapshotFile
+    {
+        public static T Read<T>(string path) where T : class
+        {
+            try
+            {
+                // The sender can replace or remove the snapshot while this handle is open.
+                using (var file = File.Open(path, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                    return (T)new DataContractJsonSerializer(typeof(T)).ReadObject(file);
+            }
+            catch (IOException) { return null; }
+            catch (System.UnauthorizedAccessException) { return null; }
+            catch (SerializationException) { return null; }
+            catch (XmlException) { return null; }
         }
     }
 }

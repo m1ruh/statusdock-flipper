@@ -244,6 +244,23 @@
                 </ControlTemplate>
             </ScrollViewer.Template>
           <StackPanel>
+            <TextBlock Text="FLIPPER CONNECTION" Margin="0,0,0,7" Style="{StaticResource SectionLabel}" />
+            <Border Padding="12,10" Margin="0,0,0,16" Background="{DynamicResource Surface}"
+                    BorderBrush="{DynamicResource Outline}" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock x:Name="FirmwareText" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="ConnectionText" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Foreground="{DynamicResource MutedText}" />
+                    <TextBlock x:Name="IssueText" Margin="0,7,0,0" FontWeight="SemiBold" TextWrapping="Wrap"
+                               Foreground="{DynamicResource Accent}" />
+                    <TextBlock x:Name="IssueDetail" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource MutedText}" />
+                    <TextBlock x:Name="ConnectionLinkRow" Margin="0,6,0,0" TextWrapping="Wrap">
+                        <Hyperlink x:Name="ConnectionLink" Foreground="{DynamicResource Accent}"
+                                   RequestNavigate="OnConnectionLink"><Run x:Name="ConnectionLinkText" /></Hyperlink>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
             <TextBlock Text="DISPLAY" Margin="0,0,0,7" Style="{StaticResource SectionLabel}" />
             <Grid>
                 <Grid.ColumnDefinitions>

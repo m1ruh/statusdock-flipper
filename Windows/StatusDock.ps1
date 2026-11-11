@@ -2,6 +2,7 @@ param(
     [ValidatePattern('^COM[0-9]+$')]
     [string]$Port,
     [switch]$MetricsOnly,
+    [switch]$InstallDesktopShortcut,
     [switch]$InstallStartup,
     [switch]$RemoveStartup,
     [switch]$Stop
@@ -13,6 +14,26 @@ $appPath = '/ext/apps/Tools/statusdock.fap'
 $settingsPath = Join-Path $PSScriptRoot 'StatusDock Settings.json'
 $liveSamplePath = Join-Path $PSScriptRoot 'StatusDock Live.json'
 $liveTempPath = "$liveSamplePath.tmp"
+$connectionPath = Join-Path $PSScriptRoot 'StatusDock Connection.json'
+$connectionTempPath = "$connectionPath.tmp"
+
+if ($InstallDesktopShortcut) {
+    $settingsExe = Join-Path $PSScriptRoot 'StatusDock Settings.exe'
+    if (-not (Test-Path -LiteralPath $settingsExe -PathType Leaf)) {
+        throw 'Build or install StatusDock Settings.exe before creating the desktop shortcut.'
+    }
+    $desktop = [Environment]::GetFolderPath('DesktopDirectory')
+    $shortcutPath = Join-Path $desktop 'StatusDock.lnk'
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $settingsExe
+    $shortcut.Arguments = '--open-and-start'
+    $shortcut.WorkingDirectory = $PSScriptRoot
+    $shortcut.Description = 'Open StatusDock Settings and start the sender'
+    $shortcut.Save()
+    Write-Host "Desktop shortcut ready: $shortcutPath"
+    return
+}
 
 if ($InstallStartup -or $RemoveStartup) {
     $startup = [Environment]::GetFolderPath('Startup')
@@ -239,17 +260,18 @@ function New-DeskSample([DateTime]$Time, [int]$Cpu, [int]$Ram, [int]$Gpu, [int]$
     }
 }
 
-function Publish-LiveSample($Sample) {
+function Write-Snapshot([string]$Path, [string]$Temporary, [string]$Json) {
     try {
-        # Publish one complete snapshot after the Flipper acknowledges its sample.
-        [IO.File]::WriteAllText($liveTempPath, (ConvertTo-Json -InputObject $Sample -Compress))
-        if ([IO.File]::Exists($liveSamplePath)) {
-            [IO.File]::Replace($liveTempPath, $liveSamplePath, [NullString]::Value)
+        [IO.File]::WriteAllText($Temporary, $Json)
+        if ([IO.File]::Exists($Path)) {
+            [IO.File]::Replace($Temporary, $Path, [NullString]::Value)
         } else {
-            [IO.File]::Move($liveTempPath, $liveSamplePath)
+            [IO.File]::Move($Temporary, $Path)
         }
+        return $true
     } catch {
         # Preview storage is optional. A write failure must not interrupt USB updates.
+        return $false
     }
 }
 
@@ -288,17 +310,71 @@ function Find-FlipperPort {
     }
 }
 
-function Invoke-FlipperCommand($Serial, [string]$Command) {
+function Invoke-FlipperCommand($Serial, [string]$Command, [switch]$WaitForLaunch) {
     $Serial.DiscardInBuffer()
     $Serial.Write($Command + "`r")
     $output = ''
     $deadline = [Diagnostics.Stopwatch]::StartNew()
-    while ($deadline.ElapsedMilliseconds -lt 2400) {
+    $reportedWait = $false
+    $nextPortCheck = 2400
+    while ($true) {
         $output += $Serial.ReadExisting()
         if ($output -match '(?m)>:[ \t]*$') { return $output }
-        Start-Sleep -Milliseconds 25
+        if ($deadline.ElapsedMilliseconds -ge 2400) {
+            if (-not $WaitForLaunch) { throw 'The Flipper did not respond over USB.' }
+            if (-not $reportedWait) {
+                Set-ConnectionStatus 'Opening' 'Waiting for the Flipper to open StatusDock. If it shows an API warning, choose Cancel.'
+                $reportedWait = $true
+            }
+            if ($deadline.ElapsedMilliseconds -ge $nextPortCheck) {
+                if ([IO.Ports.SerialPort]::GetPortNames() -notcontains $Serial.PortName) {
+                    throw 'The Flipper disconnected while opening StatusDock.'
+                }
+                $nextPortCheck = $deadline.ElapsedMilliseconds + 1000
+            }
+        }
+        if ($WaitForLaunch) {
+            if ([Threading.WaitHandle]::WaitAny($wakeEvents, 25) -ne [Threading.WaitHandle]::WaitTimeout) { return }
+        } else {
+            Start-Sleep -Milliseconds 25
+        }
     }
-    throw 'The Flipper did not respond over USB.'
+}
+
+function Read-FlipperFirmware([string]$Reply) {
+    $fields = @{}
+    foreach ($field in [regex]::Matches($Reply, '(?im)^firmware[_.](version|origin[_.](?:fork|git)|api[_.](?:major|minor))[ \t]*:[ \t]*([^\r\n]*)')) {
+        $fields[$field.Groups[1].Value.Replace('.', '_')] = $field.Groups[2].Value.Trim()
+    }
+    $version = $fields.version
+    $fork = $fields.origin_fork
+    $family = 'Unknown'
+    if ($fork -eq 'Momentum' -or (-not $fork -and $version -match '^mntm-')) {
+        $family = 'Momentum'
+    } elseif ((-not $fork -or $fork -in @('Official', 'Flipper Devices')) -and
+              (-not $fields.origin_git -or $fields.origin_git -match '^https://github\.com/flipperdevices/flipperzero-firmware(?:\.git)?/?$') -and
+              $version -match '^\d+\.\d+\.\d+$') {
+        $family = 'Official'
+    }
+    $api = $null
+    if ($fields.api_major -match '^\d+$' -and $fields.api_minor -match '^\d+$') {
+        $api = '{0}.{1}' -f $fields.api_major, $fields.api_minor
+    }
+    return [pscustomobject]@{ version = $version; fork = $fork; family = $family; api = $api }
+}
+
+function Get-FlipperLaunchIssue([string]$Reply) {
+    $plain = [regex]::Replace($Reply, '\x1b\[[0-?]*[ -/]*[@-~]', '')
+    $detail = (($plain -split '[\r\n]+' | ForEach-Object {$_.Trim()} |
+        Where-Object { $_ -and $_ -notmatch '^(?:.*>:\s*)?loader open\s|^.*>:\s*$' }) -join ' ').Trim()
+    if (-not $detail -or $detail -eq 'App started') { return }
+    $issue = switch -Regex ($detail) {
+        '(?i)\b(?:ApiTooOld|ApiTooNew|API mismatch|MissingImports)\b' { 'ApiMismatch'; break }
+        '(?i)\b(?:Application\s+".+"\s+not found|File not found|Unknown application)\b' { 'MissingApp'; break }
+        '(?i)\bLoader is locked\b' { 'AppBusy'; break }
+        default { 'LaunchFailed' }
+    }
+    return [pscustomobject]@{ kind = $issue; detail = $detail.Substring(0, [Math]::Min(400, $detail.Length)) }
 }
 
 function Sync-FlipperView($Serial) {
@@ -320,13 +396,23 @@ function Get-AppState($Serial) {
     if ($reply -match 'Application "(?:StatusDock|[^"\r\n]*statusdock\.fap)" is running') { return 'Dock' }
     if ($reply -match 'No application is running') { return 'Idle' }
     if ($reply -match 'Application .* is running') { return 'Busy' }
-    throw 'Momentum returned an unexpected response to loader info.'
+    throw 'The Flipper returned an unexpected response to loader info.'
 }
 
-function Write-Status([string]$Message) {
+function Set-ConnectionStatus([string]$State, [string]$Message) {
     if ($script:lastStatus -ne $Message) {
         Write-Host $Message
         $script:lastStatus = $Message
+    }
+    $snapshot = [ordered]@{
+        state = $State
+        message = $Message
+        firmware = $script:firmware
+        appIssue = $script:appIssue
+    }
+    $json = ConvertTo-Json -InputObject $snapshot -Compress
+    if ($script:lastConnection -cne $json -and (Write-Snapshot $connectionPath $connectionTempPath $json)) {
+        $script:lastConnection = $json
     }
 }
 
@@ -346,6 +432,10 @@ $serial = $null
 $wasLive = $false
 $started = $false
 $lastStatus = ''
+$lastConnection = ''
+$firmware = $null
+$appIssue = $null
+$launchRejected = $false
 $lastCycle = [DateTime]::UtcNow
 $lastSensors = [DateTime]::MinValue
 $gpu = 127
@@ -355,6 +445,7 @@ $cpuTemp = 255
 Write-Host 'StatusDock | Press Ctrl+C to stop the connection.'
 try {
     Clear-LiveSample
+    Set-ConnectionStatus 'Waiting' 'Waiting for the Flipper over USB.'
     $trayExe = Join-Path $PSScriptRoot 'StatusDock Settings.exe'
     if (Test-Path -LiteralPath $trayExe -PathType Leaf) {
         try {
@@ -371,7 +462,7 @@ try {
                 $wasLive = $false
                 $started = $false
                 $null = $pausedEvent.Set()
-                Write-Status 'Paused. The USB port is available to qFlipper.'
+                Set-ConnectionStatus 'Paused' 'Paused. The USB port is available to qFlipper.'
             }
             $null = $stopEvent.WaitOne(200)
             continue
@@ -388,29 +479,55 @@ try {
             if (-not $serial) {
                 $portName = Find-FlipperPort
                 if (-not $portName) {
-                    Write-Status 'Waiting for the Flipper over USB.'
+                    Set-ConnectionStatus 'Waiting' 'Waiting for the Flipper over USB.'
                     continue
                 }
                 $serial = [IO.Ports.SerialPort]::new($portName, 115200)
                 $serial.DtrEnable = $true
                 $serial.WriteTimeout = 1000
-                $serial.Open()
+                try {
+                    $serial.Open()
+                } catch [UnauthorizedAccessException] {
+                    $serial.Dispose()
+                    $serial = $null
+                    Set-ConnectionStatus 'UsbBusy' "USB port $portName is busy or unavailable. Close qFlipper and Flipper Lab if open."
+                    continue
+                }
                 Start-Sleep -Milliseconds 350
                 $null = Invoke-FlipperCommand $serial ''
+                $info = Invoke-FlipperCommand $serial 'device_info'
+                if ($null -eq $info) { continue }
+                $detected = Read-FlipperFirmware $info
+                if ($firmware.version -cne $detected.version -or $firmware.fork -cne $detected.fork -or
+                    $firmware.api -cne $detected.api) { $appIssue = $null }
+                $firmware = $detected
+                $launchRejected = $false
                 $started = $false
+                Set-ConnectionStatus 'Connected' "Connected over USB ($portName)."
             }
 
             if (-not $started) {
                 $state = Get-AppState $serial
-                if ($state -eq 'Busy' -or ($state -eq 'Idle' -and $wasLive)) {
-                    Write-Status 'Open StatusDock on the Flipper to resume.'
+                if ($state -eq 'Busy') {
+                    Set-ConnectionStatus 'AppBusy' 'Another app is open on the Flipper. Close it to start StatusDock.'
+                    continue
+                }
+                if ($state -eq 'Idle' -and $wasLive) {
+                    Set-ConnectionStatus 'AppClosed' 'Open StatusDock on the Flipper to resume.'
                     continue
                 }
                 if ($state -eq 'Idle') {
-                    $reply = Invoke-FlipperCommand $serial ('loader open "' + $appPath + '"')
-                    if ($reply -match '(?i)(not found|failed|incompatible|error|API mismatch)') {
-                        Write-Status "Could not open StatusDock on the Flipper. Check the app file and Momentum version.`n$($reply.Trim())"
-                        $null = $stopEvent.WaitOne(3500)
+                    if ($launchRejected) { continue }
+                    $reply = Invoke-FlipperCommand $serial ('loader open "' + $appPath + '"') -WaitForLaunch
+                    # Time spent waiting for the Flipper's warning is not a PC sleep or USB reconnect.
+                    $lastCycle = [DateTime]::UtcNow
+                    if ($null -eq $reply) { continue }
+                    $issue = Get-FlipperLaunchIssue $reply
+                    if ($issue) {
+                        $appIssue = $issue
+                        $launchRejected = $issue.kind -eq 'ApiMismatch'
+                        Set-ConnectionStatus 'Connected' "Connected over USB ($portName)."
+                        $null = [Threading.WaitHandle]::WaitAny($wakeEvents, 3500)
                         continue
                     }
                 }
@@ -430,25 +547,29 @@ try {
             $reply = Invoke-FlipperCommand $serial $sample.command
             if ($reply -match 'was handled') {
                 $wasLive = $true
-                Publish-LiveSample $sample
-                Write-Status "Showing live data on the Flipper ($portName)."
+                $null = Write-Snapshot $liveSamplePath $liveTempPath (ConvertTo-Json -InputObject $sample -Compress)
+                $appIssue = $null
+                $launchRejected = $false
+                Set-ConnectionStatus 'Live' "Showing live data on the Flipper ($portName)."
             } else {
                 Clear-LiveSample
                 $started = $false
-                Write-Status 'Waiting for StatusDock to respond on the Flipper.'
+                Set-ConnectionStatus 'Connected' 'Waiting for StatusDock to respond on the Flipper.'
             }
         } catch {
             Clear-LiveSample
             if ($serial) { $serial.Dispose(); $serial = $null }
             $wasLive = $false
-            Write-Status "Waiting for USB. $($_.Exception.GetBaseException().Message) Close qFlipper and Flipper Lab if they are open."
+            Set-ConnectionStatus 'UsbError' "USB connection unavailable. $($_.Exception.GetBaseException().Message)"
         } finally {
             $null = [Threading.WaitHandle]::WaitAny($wakeEvents, 1750)
         }
     }
 } finally {
     Clear-LiveSample
+    Set-ConnectionStatus 'Stopped' 'The Windows sender is stopped.'
     try { [IO.File]::Delete($liveTempPath) } catch { }
+    try { [IO.File]::Delete($connectionTempPath) } catch { }
     if ($serial) { $serial.Dispose() }
     $pausedEvent.Dispose()
     $pauseEvent.Dispose()
