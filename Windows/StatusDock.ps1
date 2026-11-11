@@ -20,10 +20,13 @@ if ($InstallStartup -or $RemoveStartup) {
     $taskName = 'StatusDock'
     if ($InstallStartup) {
         $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-        $windowsPS = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'
-        if ($Port) { $arguments += ' -Port ' + $Port }
-        $action = New-ScheduledTaskAction -Execute $windowsPS -Argument $arguments -WorkingDirectory $PSScriptRoot
+        $launcher = Join-Path $PSScriptRoot 'StatusDock Settings.exe'
+        if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+            throw 'Build or install StatusDock Settings.exe before enabling automatic startup.'
+        }
+        $arguments = '--start-sender'
+        if ($Port) { $arguments += ' ' + $Port }
+        $action = New-ScheduledTaskAction -Execute $launcher -Argument $arguments -WorkingDirectory $PSScriptRoot
         $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
         $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `

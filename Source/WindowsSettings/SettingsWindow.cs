@@ -1,10 +1,12 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
 using System.Windows.Automation;
@@ -45,16 +47,52 @@ namespace StatusDockPreview
         private StatsLayout layout;
 
         [STAThread]
-        public static void Main(string[] args)
+        public static int Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "--start-sender")
+                return StartSender(args);
             if (args.Length > 0 && args[0] == "--tray")
             {
                 int senderId;
                 if (args.Length == 2 && int.TryParse(args[1], out senderId) && senderId > 0)
                     TrayApplication.Run(senderId);
-                return;
+                return 0;
             }
-            new Application().Run(new SettingsWindow());
+            return new Application().Run(new SettingsWindow());
+        }
+
+        private static int StartSender(string[] args)
+        {
+            if (args.Length > 2 || (args.Length == 2 &&
+                !Regex.IsMatch(args[1], @"\ACOM[0-9]+\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
+                return 2;
+
+            string folder = AppDomain.CurrentDomain.BaseDirectory;
+            string script = Path.Combine(folder, "StatusDock.ps1");
+            if (!File.Exists(script)) return 2;
+
+            string systemDirectory = Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess
+                ? "Sysnative" : "System32";
+            string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                systemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
+            string arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + script + "\"";
+            if (args.Length == 2) arguments += " -Port " + args[1];
+
+            try
+            {
+                using (var sender = Process.Start(new ProcessStartInfo(powershell, arguments)
+                {
+                    WorkingDirectory = folder,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }))
+                {
+                    if (sender == null) return 1;
+                    sender.WaitForExit();
+                    return sender.ExitCode;
+                }
+            }
+            catch (Win32Exception) { return 1; }
         }
 
         public SettingsWindow()
